@@ -271,6 +271,22 @@ impl Physics {
         })
     }
 
+    /// World position and unit axes of a site: `(position, [x axis, y axis, z axis])`. The z axis
+    /// is the direction the sensor on that site looks along. Valid after [`Physics::step`].
+    pub fn site_frame(&self, s: SiteId) -> Option<([f64; 3], [[f64; 3]; 3])> {
+        let pos = *self.data.site_xpos().get(s.0)?;
+        let m = *self.data.site_xmat().get(s.0)?;
+        // `site_xmat` is row-major: column k is the k-th axis.
+        let col = |k: usize| [m[k], m[3 + k], m[6 + k]];
+        Some((pos, [col(0), col(1), col(2)]))
+    }
+
+    /// The force or torque an actuator produced during the last step (N m for AXL motors).
+    /// Zero for a bad id. It describes the start of the step, like contacts and sensors.
+    pub fn actuator_force(&self, a: ActuatorId) -> f64 {
+        self.data.actuator_force().get(a.0).copied().unwrap_or(0.0)
+    }
+
     /// The gravity vector of the model in m/s^2.
     pub fn gravity(&self) -> [f64; 3] {
         self.data.model().opt().gravity
@@ -745,6 +761,28 @@ mod tests {
         assert_relative_eq!(pos[0], p.joint_pos(j), epsilon = 1e-9);
         assert_relative_eq!(p.sensor(SensorId(1))[0], p.joint_vel(j), epsilon = 1e-9);
         assert!(p.sensor(SensorId(99)).is_empty());
+    }
+
+    #[test]
+    fn site_frame_gives_the_viewing_axis() {
+        let p = scene();
+        let (pos, axes) = p.site_frame(p.site_id("tip").unwrap()).unwrap();
+        assert_relative_eq!(pos[2], 0.52, epsilon = 1e-9);
+        // euler "0 pi/2 0" turns the site's z axis to world +x.
+        assert_relative_eq!(axes[2][0], 1.0, epsilon = 1e-9);
+        assert_relative_eq!(axes[0][2], -1.0, epsilon = 1e-9);
+        assert!(p.site_frame(SiteId(9)).is_none());
+    }
+
+    #[test]
+    fn actuator_force_follows_ctrl() {
+        let mut p = scene();
+        let a = p.actuator_id("motor").unwrap();
+        assert_eq!(p.actuator_force(a), 0.0);
+        p.set_ctrl(a, 4.0);
+        p.step();
+        assert_relative_eq!(p.actuator_force(a), 0.4, epsilon = 1e-3);
+        assert_eq!(p.actuator_force(ActuatorId(9)), 0.0);
     }
 
     #[test]
