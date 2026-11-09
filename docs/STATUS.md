@@ -16,6 +16,10 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 | M9 Missions | not started | | | |
 | M10 Release | not started | | | |
 
+## Where I stopped
+
+M2 is accepted and merged into `main` (merge commit 66135a5). M3 has not been started. Next: branch `milestone/m03` from `main`, then read `SPEC.md` "Part catalog" and write the part types, the RON loader and the 75 part files under `assets/parts/`, then procedural meshes (bevels, gear teeth, tyre tread), volume and mass, and the debug part browser.
+
 ## Owner checks
 
 Checks that need a GPU, a display or a person. Each has exact steps.
