@@ -1,0 +1,84 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # Pinned in docs/toolchains.md.
+  WASI_SDK_VERSION: "27"
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux system packages for Bevy
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+      # rust-toolchain.toml pins the compiler and the wasm32-wasip1 target.
+      # Running rustup here installs them before the cache is restored.
+      - name: Install Rust
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup show
+
+      - name: Restore the Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Fetch MuJoCo
+        run: cargo xtask fetch-mujoco
+
+      - name: Download the pinned wasi-sdk
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   asset="wasi-sdk-${WASI_SDK_VERSION}.0-x86_64-linux.tar.gz" ;;
+            macOS)   asset="wasi-sdk-${WASI_SDK_VERSION}.0-arm64-macos.tar.gz" ;;
+            Windows) asset="wasi-sdk-${WASI_SDK_VERSION}.0-x86_64-windows.tar.gz" ;;
+          esac
+          url="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/${asset}"
+          mkdir -p third_party/wasi-sdk
+          curl --fail --location --silent --show-error --retry 3 --output "third_party/${asset}" "$url"
+          tar -xzf "third_party/${asset}" -C third_party/wasi-sdk --strip-components=1
+          echo "WASI_SDK_PATH=$GITHUB_WORKSPACE/third_party/wasi-sdk" >> "$GITHUB_ENV"
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      # `cargo xtask validate` (from M1) and `cargo xtask sdk-check` (from M7)
+      # are added to this list when those milestones land.
+
+  wasm-target:
+    # Proves the pinned toolchain really has the wasm32-wasip1 target, which
+    # the sandbox used for development cannot install.
+    name: wasm32-wasip1 target
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - name: Build a trivial program for wasm32-wasip1
+        run: |
+          mkdir -p "$RUNNER_TEMP/hello/src"
+          printf '[package]\nname = "hello"\nversion = "0.0.0"\nedition = "2024"\n' > "$RUNNER_TEMP/hello/Cargo.toml"
+          printf 'fn main() { println!("hi"); }\n' > "$RUNNER_TEMP/hello/src/main.rs"
+          cd "$RUNNER_TEMP/hello"
+          cp "$GITHUB_WORKSPACE/rust-toolchain.toml" .
+          cargo build --target wasm32-wasip1 --release

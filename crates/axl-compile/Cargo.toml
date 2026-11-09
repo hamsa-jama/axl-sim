@@ -1,0 +1,11 @@
+[package]
+name = "axl-compile"
+description = "Assembly to RobotModel to MJCF text, plus the device map and body map."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]

@@ -1,0 +1,11 @@
+[package]
+name = "axl-parts"
+description = "Part catalog types, RON loading, connectors and procedural mesh generation as plain vertex data."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]

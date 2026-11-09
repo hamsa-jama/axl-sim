@@ -1,0 +1,11 @@
+[package]
+name = "axl-build"
+description = "The robot assembly: placed parts, connections, snapping, validation, undo and redo."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]

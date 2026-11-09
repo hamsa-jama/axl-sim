@@ -1,0 +1,11 @@
+[package]
+name = "axl-render"
+description = "Bevy rendering for AXL: materials, mesh upload, grid floor, overlays, camera, quality presets and the Y-up conversion."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]

@@ -1,0 +1,11 @@
+[package]
+name = "axl-hw"
+description = "Motor, battery, encoder and sensor models with seeded random noise."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]

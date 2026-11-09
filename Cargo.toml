@@ -1,0 +1,35 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/axl-app",
+    "crates/axl-render",
+    "crates/axl-parts",
+    "crates/axl-build",
+    "crates/axl-compile",
+    "crates/axl-mujoco",
+    "crates/axl-hw",
+    "crates/axl-host",
+    "crates/axl-sim",
+    "crates/axl-world",
+    "crates/axl-missions",
+    "crates/axl-validate",
+    "xtask",
+]
+# sdk/rust/axl-robot is built for wasm32-wasip1 on its own (added in M7).
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/hamsa-jama/axl-sim"
+publish = false
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.release]
+debug = "line-tables-only"
