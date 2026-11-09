@@ -32,6 +32,10 @@ struct SettingsStore {
 /// Open the AXL window and run until it is closed.
 pub fn run(args: &Args) -> AppExit {
     install_gpu_panic_hook();
+    if let Some(msg) = unsupported_backend(std::env::var("WGPU_BACKEND").ok().as_deref()) {
+        eprintln!("axl: {msg}");
+        return AppExit::error();
+    }
     // Screenshot, stress and perf runs never read or write the user's settings.
     let scripted = args.lookdev
         || args.parts.is_some()
@@ -209,6 +213,8 @@ fn install_gpu_panic_hook() {
                     "axl: no usable graphics adapter was found. Check that the GPU driver is installed (on Linux, Vulkan: run vulkaninfo --summary), then try again."
                 ),
             }
+            // The message above is the whole story: leave with status 1 instead of a backtrace.
+            std::process::exit(1);
         }
         previous(info);
     }));
@@ -509,5 +515,41 @@ fn save(store: &SettingsStore) {
         && let Err(e) = store.current.save(path)
     {
         eprintln!("axl: could not save settings: {e}");
+    }
+}
+
+/// Backends this build includes (Bevy is built without the OpenGL backend).
+const COMPILED_BACKENDS: &[&str] = &["vulkan", "vk", "dx12", "d3d12", "metal", "mtl", "all", "primary"];
+
+/// An explanation if `WGPU_BACKEND` names only backends this build lacks, else `None`.
+fn unsupported_backend(value: Option<&str>) -> Option<String> {
+    let v = value?.trim().to_lowercase();
+    if v.is_empty() {
+        return None;
+    }
+    let any_ok = v
+        .split([',', '|'])
+        .map(str::trim)
+        .any(|b| COMPILED_BACKENDS.contains(&b));
+    if any_ok {
+        return None;
+    }
+    Some(format!(
+        "WGPU_BACKEND={v} is not available: this build only includes the Vulkan, DirectX 12 and Metal backends (not OpenGL). Unset WGPU_BACKEND, or set it to vulkan, dx12 or metal."
+    ))
+}
+
+#[cfg(test)]
+mod backend_tests {
+    use super::unsupported_backend;
+
+    #[test]
+    fn gl_is_refused_and_vulkan_accepted() {
+        assert!(unsupported_backend(Some("gl")).is_some());
+        assert!(unsupported_backend(Some("opengl")).is_some());
+        assert!(unsupported_backend(Some("vulkan")).is_none());
+        assert!(unsupported_backend(Some("vulkan,gl")).is_none());
+        assert!(unsupported_backend(None).is_none());
+        assert!(unsupported_backend(Some("")).is_none());
     }
 }

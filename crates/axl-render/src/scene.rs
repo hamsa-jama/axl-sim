@@ -198,12 +198,10 @@ impl PartMaterials {
         uid: u32,
         micro_on: bool,
     ) -> Handle<StandardMaterial> {
-        let var = part_variation(uid);
         // Quantise to three levels each (minus, none, plus) so that parts with similar variation
         // share a material: separate materials cannot batch, and 200 unique ones cost 200 draws in
         // every pass. Rounding to 0.03 roughness and 1.5% brightness steps keeps the spec's range.
-        let rq = (var.roughness_delta / 0.03).round() as i32 * 3;
-        let bq = ((var.brightness_scale - 1.0) / 0.015).round() as i32 * 15;
+        let (rq, bq) = quantised_variation(uid);
         let key = (0, kind, rgb, rq, bq);
         if let Some(h) = self.cache.get(&key) {
             return h.clone();
@@ -492,5 +490,27 @@ mod tests {
             SceneDef::from_ron(&text),
             Err(ConfigError::TooNew)
         ));
+    }
+}
+
+/// Per-part variation of `uid` quantised to three roughness and three brightness levels:
+/// (roughness delta in hundredths, brightness delta in thousandths). At most 9 combinations, so at
+/// most 9 materials per colour however many parts there are.
+pub fn quantised_variation(uid: u32) -> (i32, i32) {
+    let var = part_variation(uid);
+    let rq = (var.roughness_delta / 0.03).round() as i32 * 3;
+    let bq = ((var.brightness_scale - 1.0) / 0.015).round() as i32 * 15;
+    (rq, bq)
+}
+
+#[cfg(test)]
+mod variation_tests {
+    use super::quantised_variation;
+    use std::collections::HashSet;
+
+    #[test]
+    fn at_most_nine_materials_per_colour() {
+        let set: HashSet<_> = (0..5000u32).map(quantised_variation).collect();
+        assert!(set.len() <= 9, "{} variations", set.len());
     }
 }

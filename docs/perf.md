@@ -114,3 +114,26 @@ First launch from an empty folder logged "76.3 ms per frame (13.1 fps), chose Lo
 `settings.ron`. The environment line reads "filtered once and frozen". The opaque pass is the largest
 single cost on every preset (about 20.7 ms on Low and Medium); attribution runs with `--disable` are
 pending from the owner.
+
+## Review of opaque-pass cost (code reading, no changes made)
+
+The owner measured about 20.7 ms in the opaque pass on both Low and Medium, so it does not depend on
+the effects those presets differ in. Notes from reading the code; none of these is a measured cause.
+`--disable grid` and `--disable shadows` runs on Low will say which matters.
+
+- **Floor fragment cost.** The 200 m floor covers most of the screen, so most fragments in the opaque
+  pass are floor fragments, each running the full `StandardMaterial` PBR path (environment map
+  sampling, shadow lookup, directional light) plus `grid_floor.wesl`.
+- **Grid shader per fragment.** Three `family()` calls (minor, major, bold), each doing its own
+  `fwidth` of a vec2 and a `fract`/`abs`; one more `fwidth` for the axes; `distance()` for the fade;
+  stud dots and measure markers sit behind uniform branches and cost nothing when off. That is
+  roughly 4 derivative pairs and a few dozen ALU operations: small next to a PBR fragment, but
+  it is paid by every floor pixel. Possible savings if the attribution run points here: compute
+  `fwidth(uv)` once and scale it by 1/spacing (the three families differ only by a constant factor),
+  and skip a family when its `spacing_fade` is already 0 or the distance fade is 0.
+- **Shadows on Low.** One cascade, 1024 px, `Hardware2x2` filtering: one shadow-map lookup per
+  fragment. This is already the cheapest setting; the cascade count is not the cost on Low. Medium
+  uses 2 cascades with Gaussian filtering only when `soft`, which Medium does not set.
+- **Fill rate.** At 1920x1000 the pass touches about 1.9 million fragments, plus depth pre-pass
+  overdraw from the floor under every box. The render-scale 0.75 on Low would cut fragments by 44%
+  if it were applied (decision 0006 defers it).

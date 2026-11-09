@@ -181,7 +181,7 @@ pub fn spawn_view_camera(
                 ..default()
             }),
             orbit_transform(home),
-            Hdr,
+            // `Hdr` is added by `apply_quality` only for presets with bloom (decision 0006).
             Msaa::Off,
             if disable.tonemap {
                 Tonemapping::None
