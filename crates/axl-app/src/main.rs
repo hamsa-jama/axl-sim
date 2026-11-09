@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "gui")]
+mod browser_ui;
 mod cli;
 #[cfg(feature = "gui")]
 mod gui;

@@ -15,6 +15,7 @@ use axl_render::{BenchmarkFinished, RenderOptions, StageContent, StagePlugin};
 use bevy_egui::input::EguiWantsInput;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 
+use crate::browser_ui::browser_panel;
 use crate::cli::Args;
 use crate::settings::Settings;
 
@@ -196,6 +197,10 @@ pub fn run(args: &Args) -> AppExit {
     .add_systems(
         EguiPrimaryContextPass,
         (control_bar, status_bar, gizmo_overlay).chain(),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        browser_panel.run_if(resource_exists::<axl_render::browser::BrowserState>),
     );
     app.run()
 }
@@ -519,7 +524,9 @@ fn save(store: &SettingsStore) {
 }
 
 /// Backends this build includes (Bevy is built without the OpenGL backend).
-const COMPILED_BACKENDS: &[&str] = &["vulkan", "vk", "dx12", "d3d12", "metal", "mtl", "all", "primary"];
+const COMPILED_BACKENDS: &[&str] = &[
+    "vulkan", "vk", "dx12", "d3d12", "metal", "mtl", "all", "primary",
+];
 
 /// An explanation if `WGPU_BACKEND` names only backends this build lacks, else `None`.
 fn unsupported_backend(value: Option<&str>) -> Option<String> {

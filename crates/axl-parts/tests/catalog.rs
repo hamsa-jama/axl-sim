@@ -197,3 +197,47 @@ fn sample_axle_8() {
 fn sample_gear_24() {
     check("gear_24", 1375.2);
 }
+
+/// Every part's render mesh is watertight: after welding vertices that share a position, each
+/// directed edge a->b is matched by exactly one b->a edge (so every edge borders two triangles
+/// with consistent winding and there are no holes). Checked per body over all of its surfaces.
+#[test]
+fn every_part_mesh_is_watertight() {
+    use std::collections::HashMap;
+    let mut bad = Vec::new();
+    for p in load().iter() {
+        let pm = p.build_mesh();
+        for body in 0..p.bodies.len() {
+            let mut ids: HashMap<[i64; 3], u32> = HashMap::new();
+            let mut edges: HashMap<(u32, u32), i32> = HashMap::new();
+            for s in pm.slots.iter().filter(|s| s.body == body) {
+                let w: Vec<u32> = s
+                    .mesh
+                    .positions
+                    .iter()
+                    .map(|q| {
+                        let key = q.map(|x| (x as f64 * 1e7).round() as i64);
+                        let n = ids.len() as u32;
+                        *ids.entry(key).or_insert(n)
+                    })
+                    .collect();
+                for t in s.mesh.indices.chunks(3) {
+                    for k in 0..3 {
+                        let (a, b) = (w[t[k] as usize], w[t[(k + 1) % 3] as usize]);
+                        if a != b {
+                            *edges.entry((a, b)).or_default() += 1;
+                        }
+                    }
+                }
+            }
+            let open = edges
+                .iter()
+                .filter(|((a, b), n)| edges.get(&(*b, *a)).copied().unwrap_or(0) != **n)
+                .count();
+            if open > 0 {
+                bad.push(format!("{} body {body}: {open} unmatched edges", p.id.0));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "not watertight:\n{}", bad.join("\n"));
+}
