@@ -26,7 +26,7 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | O3 | M1 | Push the `m01-done` tag (sandbox push refused) | `git fetch origin && git tag -a m01-done -m "M1 physics core accepted" c8f2a82 && git push origin m01-done`. |
 | O0 | M0 | Push the `m00-done` tag | Done by the owner (tag points at 80b4537). |
 | O4 | M2 | 200 boxes hold 60 fps on High on a mid-range GPU | Follow `docs/perf.md`: `cargo run -p axl-app --release -- --stress-boxes 200 --quality high --perf-seconds 10`, read the `perf:` line (needs `fps` at or above 60 and `p99_ms` below about 20) and record it in the table in `docs/perf.md`. Also run once without `--quality` on a fresh data folder to confirm the first-launch benchmark picks a sensible preset. |
-| O5 | M2 | Push the `m02-done` tag (sandbox push refused) | `git fetch origin && git tag -a m02-done -m "M2 rendering and grid accepted" <merge commit of milestone/m02 on main> && git push origin m02-done`. |
+| O5 | M2 | Push the `m02-done` tag (sandbox push refused) | `git fetch origin && git tag -a m02-done -m "M2 rendering and grid accepted" 66135a5 && git push origin m02-done`. |
 | O6 | M2 | Approve the look | Open `docs/screenshots/lookdev-high-1920x1080.png`, then on a real GPU run `cargo run -p axl-app --release -- --lookdev` and compare. Optional: swap the procedural studio cubemap for a Poly Haven HDRI (see decision 0005). |
 | O2 | M0 | The window opens on a real GPU | On a desktop machine: `cargo xtask fetch-mujoco && cargo run -p axl-app --release`. A dark window titled "AXL" with a status bar reading "AXL 0.1.0" should open and close normally. |
 
