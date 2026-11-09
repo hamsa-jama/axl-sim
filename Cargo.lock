@@ -487,6 +487,8 @@ dependencies = [
 name = "axl-host"
 version = "0.1.0"
 dependencies = [
+ "axl-hw",
+ "rand_chacha",
  "thiserror 2.0.21",
  "wasmtime",
 ]
