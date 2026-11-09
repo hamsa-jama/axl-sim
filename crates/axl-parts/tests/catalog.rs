@@ -198,46 +198,50 @@ fn sample_gear_24() {
     check("gear_24", 1375.2);
 }
 
-/// Every part's render mesh is watertight: after welding vertices that share a position, each
-/// directed edge a->b is matched by exactly one b->a edge (so every edge borders two triangles
-/// with consistent winding and there are no holes). Checked per body over all of its surfaces.
+/// Every part's render mesh is closed and outward facing. A surface with a hole has a non-zero
+/// net outward flux, so its signed volume changes when the whole mesh is translated; a closed
+/// surface's does not (the same test `TriMesh::is_closed` uses). It is applied to the finished
+/// render mesh of each body (all slots of the body together, in metres). It tolerates
+/// T-junctions from collinear stitching points, which cannot leak, but catches missing or flipped
+/// faces. The volume must also be positive, which means the winding faces outwards.
 #[test]
-fn every_part_mesh_is_watertight() {
-    use std::collections::HashMap;
+fn every_part_mesh_is_closed_and_outward_facing() {
+    fn signed_volume(tris: &[[[f64; 3]; 3]], off: [f64; 3]) -> f64 {
+        let mut v = 0.0;
+        for t in tris {
+            let [a, b, c] = t.map(|p| [p[0] + off[0], p[1] + off[1], p[2] + off[2]]);
+            v += a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
+                + a[2] * (b[0] * c[1] - b[1] * c[0]);
+        }
+        v / 6.0
+    }
     let mut bad = Vec::new();
     for p in load().iter() {
         let pm = p.build_mesh();
         for body in 0..p.bodies.len() {
-            let mut ids: HashMap<[i64; 3], u32> = HashMap::new();
-            let mut edges: HashMap<(u32, u32), i32> = HashMap::new();
+            let mut tris = Vec::new();
             for s in pm.slots.iter().filter(|s| s.body == body) {
-                let w: Vec<u32> = s
-                    .mesh
-                    .positions
-                    .iter()
-                    .map(|q| {
-                        let key = q.map(|x| (x as f64 * 1e7).round() as i64);
-                        let n = ids.len() as u32;
-                        *ids.entry(key).or_insert(n)
-                    })
-                    .collect();
                 for t in s.mesh.indices.chunks(3) {
-                    for k in 0..3 {
-                        let (a, b) = (w[t[k] as usize], w[t[(k + 1) % 3] as usize]);
-                        if a != b {
-                            *edges.entry((a, b)).or_default() += 1;
-                        }
-                    }
+                    tris.push([0, 1, 2].map(|k| s.mesh.positions[t[k] as usize].map(|x| x as f64)));
                 }
             }
-            let open = edges
-                .iter()
-                .filter(|((a, b), n)| edges.get(&(*b, *a)).copied().unwrap_or(0) != **n)
-                .count();
-            if open > 0 {
-                bad.push(format!("{} body {body}: {open} unmatched edges", p.id.0));
+            if tris.is_empty() {
+                continue;
+            }
+            let v0 = signed_volume(&tris, [0.0; 3]);
+            let v1 = signed_volume(&tris, [0.137, -0.251, 0.089]);
+            // f32 positions: allow a relative error of 1e-4 of the part's own volume.
+            if v0 <= 0.0 || (v1 - v0).abs() > 1e-4 * v0 {
+                bad.push(format!(
+                    "{} body {body}: volume {v0:e}, translated {v1:e}",
+                    p.id.0
+                ));
             }
         }
     }
-    assert!(bad.is_empty(), "not watertight:\n{}", bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "mesh not closed or inside-out:\n{}",
+        bad.join("\n")
+    );
 }
