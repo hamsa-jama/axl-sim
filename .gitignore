@@ -3,3 +3,4 @@ third_party/
 *.wasm
 !**/fixtures/**/*.wasm
 .DS_Store
+MUJOCO_LOG.TXT

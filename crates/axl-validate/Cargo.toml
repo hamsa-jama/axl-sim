@@ -8,4 +8,11 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[[bin]]
+name = "axl-validate"
+path = "src/main.rs"
+
 [dependencies]
+axl-mujoco = { path = "../axl-mujoco" }
+rand_chacha = "0.3"
+sha2 = "0.10"

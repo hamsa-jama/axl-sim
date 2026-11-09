@@ -1,5 +1,7 @@
 //! The `axl` binary. See `README.md` in this crate.
 
+#![forbid(unsafe_code)]
+
 mod cli;
 #[cfg(feature = "gui")]
 mod gui;

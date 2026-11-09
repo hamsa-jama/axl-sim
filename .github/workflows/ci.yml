@@ -40,6 +40,10 @@ jobs:
       - name: Fetch MuJoCo
         run: cargo xtask fetch-mujoco
 
+      - name: Point Cargo at MuJoCo
+        shell: bash
+        run: cargo xtask mujoco-env >> "$GITHUB_ENV"
+
       - name: Download the pinned wasi-sdk
         shell: bash
         run: |
@@ -63,8 +67,17 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
-      # `cargo xtask validate` (from M1) and `cargo xtask sdk-check` (from M7)
-      # are added to this list when those milestones land.
+      - name: Accuracy suite
+        run: cargo xtask validate
+
+      - name: Upload the accuracy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-${{ matrix.os }}
+          path: target/validation/
+
+      # `cargo xtask sdk-check` (from M7) is added here when that milestone lands.
 
   wasm-target:
     # Proves the pinned toolchain really has the wasm32-wasip1 target, which
