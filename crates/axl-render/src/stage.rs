@@ -12,6 +12,7 @@ use crate::frames::spawn_root;
 use crate::grid::{GridMaterial, GridSettings, spawn_floor};
 use crate::lighting::LightingConfig;
 use crate::quality::{BenchmarkConfig, BenchmarkRun, QualityPreset};
+use crate::parts::PartLibrary;
 use crate::scene::{
     PartMaterials, SceneDef, ShapeBuilder, StressBoxes, spawn_scene, spawn_stress_boxes,
 };
@@ -24,6 +25,8 @@ pub enum StageContent {
     Lookdev,
     /// `n` boxes moving through the snapshot path, for the frame-rate check.
     Stress(usize),
+    /// The part browser: a contact sheet of the parts matching the filter (empty shows all).
+    Parts(crate::browser::BrowserState),
 }
 
 /// Everything the render plugin needs at start-up.
@@ -117,6 +120,7 @@ impl Plugin for StagePlugin {
             .insert_resource(StartPose(opts.camera_pose))
             .insert_resource(ActiveQuality(opts.quality))
             .insert_resource(GlobalAmbientLight::NONE)
+            .insert_resource(PartLibrary::load())
             .init_resource::<SnapshotBuffer>()
             .init_resource::<crate::sync::PlaybackSpeed>()
             .add_message::<BenchmarkFinished>()
@@ -129,6 +133,9 @@ impl Plugin for StagePlugin {
         match &opts.content {
             StageContent::Lookdev => {
                 app.insert_resource(SceneDef::load_lookdev());
+            }
+            StageContent::Parts(state) => {
+                app.add_plugins(crate::browser::BrowserPlugin(state.clone()));
             }
             StageContent::Stress(n) => {
                 app.insert_resource(StressBoxes(*n));
@@ -171,6 +178,7 @@ fn setup_stage(
     mut std_mats: ResMut<Assets<StandardMaterial>>,
     mut grid_mats: ResMut<Assets<GridMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    mut lib: ResMut<PartLibrary>,
     lighting: Res<LightingConfig>,
     grid: Res<GridSettings>,
     quality: Res<ActiveQuality>,
@@ -196,6 +204,7 @@ fn setup_stage(
             meshes: &mut meshes,
             materials: &mut std_mats,
             parts: &mut parts,
+            lib: &mut lib,
             micro_on: quality.0.settings().micro_surface,
         };
         if let Some(scene) = scene {

@@ -13,4 +13,5 @@ bevy = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 thiserror = "2"
+axl-parts = { path = "../axl-parts" }
 tracing = "0.1"

@@ -469,6 +469,7 @@ dependencies = [
 name = "axl-render"
 version = "0.1.0"
 dependencies = [
+ "axl-parts",
  "bevy",
  "ron",
  "serde",

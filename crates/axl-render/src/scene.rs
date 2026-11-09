@@ -1,6 +1,6 @@
 //! The look-dev scene (`assets/scenes/lookdev.ron`) and the 200-box stress scene.
 //!
-//! Both are built from placeholder shapes. Each item gets a `uid`, which seeds the small
+//! The look-dev scene is built from real parts; the stress scene uses chamfered boxes. Each part gets a `uid`, which seeds the small
 //! per-part roughness and brightness variation, exactly as real parts will.
 
 use std::collections::BTreeMap;
@@ -17,7 +17,8 @@ use crate::materials_data::{
     MICRO_NORMAL_SIZE, MICRO_NORMAL_STRENGTH, abs, micro_surface_normal_map_mips, mip_count,
     part_color, part_variation,
 };
-use crate::placeholder::{bevel_box_mesh, cylinder_mesh, gear_blank_mesh, sphere_mesh};
+use crate::parts::PartLibrary;
+use crate::placeholder::bevel_box_mesh;
 use crate::sync::SimBody;
 
 /// The shipped look-dev scene, used when no file is found on disk.
@@ -36,76 +37,26 @@ pub enum MaterialKind {
     Steel,
 }
 
-/// Axis a cylinder points along.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Axis {
-    /// AXL X.
-    X,
-    /// AXL Y.
-    Y,
-    /// AXL Z.
-    Z,
-}
-
-/// A placeholder shape. Lengths are in millimetres.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum Shape {
-    /// Chamfered box, centred on the offset.
-    Box {
-        /// Full edge lengths (x, y, z).
-        size_mm: (f32, f32, f32),
-        /// Chamfer width.
-        bevel_mm: f32,
-    },
-    /// Cylinder.
-    Cylinder {
-        /// Radius.
-        radius_mm: f32,
-        /// Length.
-        length_mm: f32,
-        /// Axis it points along.
-        axis: Axis,
-    },
-    /// Sphere.
-    Sphere {
-        /// Radius.
-        radius_mm: f32,
-    },
-    /// A grid of 4.8 x 1.7 mm studs on an 8 mm pitch, centred on the offset.
-    Studs {
-        /// Studs along X.
-        nx: u32,
-        /// Studs along Y.
-        ny: u32,
-    },
-    /// Placeholder spur gear (module 1 mm), axis along Z.
-    Gear {
-        /// Tooth count.
-        teeth: u32,
-        /// Thickness.
-        thickness_mm: f32,
-    },
-}
-
 fn zero3() -> (f32, f32, f32) {
     (0.0, 0.0, 0.0)
 }
 
-/// One shape inside an item.
+/// A real part placed in a scene. Lengths are millimetres, angles degrees.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ShapeEntry {
-    /// The shape.
-    pub shape: Shape,
-    /// Offset from the item origin, mm.
+pub struct PartRef {
+    /// Part id from `assets/parts`, for example `brick_2x4`.
+    pub part: String,
+    /// Position of the part frame origin, relative to the item, mm.
     #[serde(default = "zero3")]
-    pub offset_mm: (f32, f32, f32),
+    pub pos_mm: (f32, f32, f32),
+    /// Rotation about X, Y, Z (applied as Rz * Ry * Rx).
+    #[serde(default = "zero3")]
+    pub rot_deg: (f32, f32, f32),
     /// Colour id such as `"red"`, or `"#RRGGBB"`.
     pub color: String,
-    /// Surface type.
-    pub material: MaterialKind,
 }
 
-/// A group of shapes placed together.
+/// A group of parts placed together.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Item {
     /// Name for the entity.
@@ -115,8 +66,8 @@ pub struct Item {
     /// Rotation about Z in degrees.
     #[serde(default)]
     pub yaw_deg: f32,
-    /// The shapes.
-    pub shapes: Vec<ShapeEntry>,
+    /// The parts.
+    pub parts: Vec<PartRef>,
 }
 
 /// Initial camera for a scene (AXL frame).
@@ -326,79 +277,40 @@ pub fn apply_micro_surface(
     }
 }
 
-/// Everything needed to turn shapes into entities.
+/// Everything needed to turn parts into entities.
 pub struct ShapeBuilder<'a> {
     /// Mesh assets.
     pub meshes: &'a mut Assets<Mesh>,
     /// Material assets.
     pub materials: &'a mut Assets<StandardMaterial>,
-    /// Shared caches.
+    /// Shared material caches.
     pub parts: &'a mut PartMaterials,
+    /// The part catalog and uploaded part meshes.
+    pub lib: &'a mut PartLibrary,
     /// Whether micro-surface detail starts enabled.
     pub micro_on: bool,
 }
 
-impl ShapeBuilder<'_> {
-    fn mesh_for(&mut self, shape: &Shape) -> (Handle<Mesh>, Transform) {
-        let key = format!("{shape:?}");
-        match shape {
-            Shape::Box {
-                size_mm: (x, y, z),
-                bevel_mm,
-            } => {
-                let half = Vec3::new(*x, *y, *z) * MM * 0.5;
-                let b = *bevel_mm * MM;
-                (
-                    self.parts
-                        .mesh(self.meshes, key, || bevel_box_mesh(half, b)),
-                    Transform::default(),
-                )
-            }
-            Shape::Cylinder {
-                radius_mm,
-                length_mm,
-                axis,
-            } => {
-                let (r, l) = (radius_mm * MM, length_mm * MM);
-                let key = format!("cyl {r} {l}");
-                let rot = match axis {
-                    Axis::Z => Quat::IDENTITY,
-                    Axis::X => Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
-                    Axis::Y => Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
-                };
-                (
-                    self.parts.mesh(self.meshes, key, || cylinder_mesh(r, l)),
-                    Transform::from_rotation(rot),
-                )
-            }
-            Shape::Sphere { radius_mm } => {
-                let r = radius_mm * MM;
-                (
-                    self.parts.mesh(self.meshes, key, || sphere_mesh(r)),
-                    Transform::default(),
-                )
-            }
-            Shape::Studs { .. } => unreachable!("studs are expanded by the caller"),
-            Shape::Gear {
-                teeth,
-                thickness_mm,
-            } => {
-                let (t, th) = (*teeth, thickness_mm * MM);
-                (
-                    self.parts.mesh(self.meshes, key, || gear_blank_mesh(t, th)),
-                    Transform::default(),
-                )
-            }
-        }
-    }
+/// Transform for a part placed with millimetres and Rz * Ry * Rx degrees.
+pub fn part_transform(pos_mm: (f32, f32, f32), rot_deg: (f32, f32, f32)) -> Transform {
+    Transform::from_translation(Vec3::new(pos_mm.0, pos_mm.1, pos_mm.2) * MM).with_rotation(
+        Quat::from_euler(
+            EulerRot::ZYX,
+            rot_deg.2.to_radians(),
+            rot_deg.1.to_radians(),
+            rot_deg.0.to_radians(),
+        ),
+    )
+}
 
-    /// Spawn one item under `root` and return its entity.
+impl ShapeBuilder<'_> {
+    /// Spawn one item (a group of parts) under `root` and return its entity.
     pub fn spawn_item(
         &mut self,
         commands: &mut Commands,
         root: Entity,
         item: &Item,
-        uid: u32,
+        first_uid: u32,
     ) -> Entity {
         let (px, py, pz) = item.pos_mm;
         let parent = commands
@@ -410,47 +322,13 @@ impl ShapeBuilder<'_> {
             ))
             .id();
         commands.entity(root).add_child(parent);
-        for entry in &item.shapes {
-            let Some(rgb) = resolve_color(&entry.color) else {
-                tracing::warn!("unknown colour {:?} in item {}", entry.color, item.name);
-                continue;
-            };
-            let mat = self.materials_for(entry.material, rgb, uid);
-            let (ox, oy, oz) = entry.offset_mm;
-            let offset = Vec3::new(ox, oy, oz) * MM;
-            if let Shape::Studs { nx, ny } = entry.shape {
-                // 4.8 x 1.7 mm studs; the mesh centre sits half a stud above the offset.
-                let stud = Shape::Cylinder {
-                    radius_mm: 2.4,
-                    length_mm: 1.7,
-                    axis: Axis::Z,
-                };
-                let (mesh, tf) = self.mesh_for(&stud);
-                for ix in 0..nx {
-                    for iy in 0..ny {
-                        let x = (ix as f32 - (nx as f32 - 1.0) * 0.5) * 8.0 * MM;
-                        let y = (iy as f32 - (ny as f32 - 1.0) * 0.5) * 8.0 * MM;
-                        let child = commands
-                            .spawn((
-                                Mesh3d(mesh.clone()),
-                                MeshMaterial3d(mat.clone()),
-                                Transform::from_translation(offset + Vec3::new(x, y, 0.85 * MM))
-                                    .with_rotation(tf.rotation),
-                            ))
-                            .id();
-                        commands.entity(parent).add_child(child);
-                    }
-                }
-            } else {
-                let (mesh, tf) = self.mesh_for(&entry.shape);
-                let child = commands
-                    .spawn((
-                        Mesh3d(mesh),
-                        MeshMaterial3d(mat),
-                        Transform::from_translation(offset).with_rotation(tf.rotation),
-                    ))
-                    .id();
-                commands.entity(parent).add_child(child);
+        for (i, p) in item.parts.iter().enumerate() {
+            let tf = part_transform(p.pos_mm, p.rot_deg);
+            if self
+                .spawn_part(commands, parent, &p.part, &p.color, first_uid + i as u32, tf)
+                .is_none()
+            {
+                tracing::warn!("unknown part {:?} in item {}", p.part, item.name);
             }
         }
         parent
@@ -475,8 +353,10 @@ pub fn spawn_scene(
     builder: &mut ShapeBuilder,
 ) -> Option<Entity> {
     let mut rover = None;
-    for (i, item) in scene.items.iter().enumerate() {
-        let e = builder.spawn_item(commands, root, item, i as u32 + 1);
+    let mut uid = 1;
+    for item in &scene.items {
+        let e = builder.spawn_item(commands, root, item, uid);
+        uid += item.parts.len() as u32;
         if item.name == "rover" {
             rover = Some(e);
         }
@@ -533,48 +413,58 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shipped_lookdev_scene_parses_and_has_the_required_objects() {
+    fn shipped_lookdev_scene_parses_and_uses_real_parts() {
         let s = SceneDef::from_ron(DEFAULT_LOOKDEV_RON).unwrap();
         let names: Vec<&str> = s.items.iter().map(|i| i.name.as_str()).collect();
         for needed in ["brick_2x4", "beam_7", "gear_24", "wheel_56", "rover"] {
             assert!(names.contains(&needed), "missing {needed}");
         }
+        let catalog = axl_parts::Catalog::builtin();
         for item in &s.items {
-            for e in &item.shapes {
-                assert!(resolve_color(&e.color).is_some(), "bad colour {}", e.color);
+            for p in &item.parts {
+                assert!(resolve_color(&p.color).is_some(), "bad colour {}", p.color);
+                assert!(catalog.get(&p.part).is_some(), "unknown part {}", p.part);
             }
         }
     }
 
     #[test]
-    fn brick_2x4_has_spec_footprint() {
+    fn the_rover_has_the_parts_the_spec_lists() {
         let s = SceneDef::from_ron(DEFAULT_LOOKDEV_RON).unwrap();
-        let brick = s.items.iter().find(|i| i.name == "brick_2x4").unwrap();
-        let body = brick
-            .shapes
-            .iter()
-            .find_map(|e| match e.shape {
-                Shape::Box { size_mm, .. } => Some(size_mm),
-                _ => None,
-            })
-            .unwrap();
-        // (8.0 n - 0.2) mm footprint and 9.6 mm height.
-        assert!((body.0 - 31.8).abs() < 1e-4 && (body.1 - 15.8).abs() < 1e-4);
-        assert!((body.2 - 9.6).abs() < 1e-4);
+        let rover = s.items.iter().find(|i| i.name == "rover").unwrap();
+        let count = |id: &str| rover.parts.iter().filter(|p| p.part == id).count();
+        assert_eq!(count("hub"), 1);
+        assert_eq!(count("motor_medium"), 2);
+        assert_eq!(count("wheel_56"), 2);
+        assert_eq!(count("caster_ball"), 1);
+        assert_eq!(count("sensor_ultrasonic"), 1);
+        assert_eq!(count("sensor_color"), 1);
     }
 
     #[test]
-    fn wheel_is_56_mm_and_gear_is_24_teeth() {
+    fn the_scene_uses_the_requested_parts() {
         let s = SceneDef::from_ron(DEFAULT_LOOKDEV_RON).unwrap();
-        let wheel = s.items.iter().find(|i| i.name == "wheel_56").unwrap();
-        assert!(wheel.shapes.iter().any(|e| matches!(
-            e.shape, Shape::Cylinder { radius_mm, .. } if (radius_mm - 28.0).abs() < 1e-4)));
-        let gear = s.items.iter().find(|i| i.name == "gear_24").unwrap();
-        assert!(
-            gear.shapes
+        let ids = |name: &str| -> Vec<String> {
+            s.items
                 .iter()
-                .any(|e| matches!(e.shape, Shape::Gear { teeth: 24, .. }))
-        );
+                .find(|i| i.name == name)
+                .unwrap()
+                .parts
+                .iter()
+                .map(|p| p.part.clone())
+                .collect()
+        };
+        assert_eq!(ids("brick_2x4"), ["brick_2x4"]);
+        assert_eq!(ids("beam_7"), ["beam_7"]);
+        assert_eq!(ids("gear_24"), ["gear_24"]);
+        assert_eq!(ids("wheel_56"), ["wheel_56"]);
+    }
+
+    #[test]
+    fn part_rotation_order_is_z_y_x() {
+        let tf = part_transform((0.0, 0.0, 0.0), (90.0, 0.0, 90.0));
+        // Rx(90) turns +Z into -Y, then Rz(90) turns -Y into +X.
+        assert!((tf.rotation * Vec3::Z - Vec3::X).length() < 1e-5);
     }
 
     #[test]
