@@ -92,6 +92,7 @@ fn part(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn block_part(
     cat: Category,
     id: String,

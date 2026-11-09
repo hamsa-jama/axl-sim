@@ -15,7 +15,7 @@ use crate::scene::{PartMaterials, ShapeBuilder};
 const MM: f32 = 0.001;
 
 /// What the browser shows. Change it and the view rebuilds.
-#[derive(Resource, Clone, Debug, PartialEq, Eq)]
+#[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BrowserState {
     /// Text filter on part id, name or category (empty or `all` shows every part).
     pub query: String,
@@ -27,18 +27,6 @@ pub struct BrowserState {
     pub show_connectors: bool,
     /// Draw collision shapes on the isolated part.
     pub show_collision: bool,
-}
-
-impl Default for BrowserState {
-    fn default() -> Self {
-        Self {
-            query: String::new(),
-            selected: None,
-            color: None,
-            show_connectors: false,
-            show_collision: false,
-        }
-    }
 }
 
 /// Facts about one part, for the side panel.
@@ -111,7 +99,9 @@ pub fn layout_rows(
             rows.push(Vec::new());
             x = 0.0;
         }
-        rows.last_mut().map(|r| r.push(i));
+        if let Some(r) = rows.last_mut() {
+            r.push(i);
+        }
         x += w + gap;
     }
     let row_w: Vec<f32> = rows
