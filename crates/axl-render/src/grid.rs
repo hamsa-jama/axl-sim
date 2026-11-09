@@ -51,7 +51,8 @@ impl Default for GridSettings {
             units: GridUnits::Studs,
             opacity_builder: OPACITY_BUILDER,
             opacity_simulate: OPACITY_SIMULATE,
-            stud_dots: true,
+            // Off by default: the dots are a builder extra (the Builder screen switches them on).
+            stud_dots: false,
             measure_active: false,
         }
     }
