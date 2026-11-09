@@ -4,3 +4,6 @@ third_party/
 !**/fixtures/**/*.wasm
 .DS_Store
 MUJOCO_LOG.TXT
+
+# Output of --perf-seconds runs
+perf.json
