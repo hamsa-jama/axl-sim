@@ -30,3 +30,8 @@ All crates exist as skeletons. Only `axl-app` has code: a clap command line, a h
   - `sync`: `SnapshotBuffer` and `SimBody`, which move entities to poses interpolated between the two newest snapshots (the sim thread will publish them from M5/M6).
   - `stage`: `StagePlugin`, which wires all of the above, plus the screenshot runner, the benchmark and the frame-time recorder.
 - `axl-app`: the egui control bar (quality, view mode, units, grid opacity, measure tool, camera mode), the corner XYZ gizmo, and `settings.ron` in the user data folder (atomic writes, `.bak`).
+
+## After M3
+
+- `axl-parts`: `types` (spec part types), `catalog` (RON loader and the built-in catalog of 75 parts), generators (`trimesh`, `earcut`, `profile`, `extrude`, `lathe`, `block`, `shapes`, `devices`, `generate`) that return plain vertex data and an analytic solid volume per part. Part files under `assets/parts/` are checked against the generator by a test.
+- `axl-render`: `parts` (part library: uploads each part mesh once), `browser` (debug part browser view and overlays; the egui side panel is `axl-app/src/browser_ui.rs`), `hdri` (optional `assets/render/studio.hdr`), `scene` (look-dev scene from `assets/scenes/lookdev.ron`). Values that differ from the spec text are in decision 0007.

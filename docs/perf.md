@@ -137,3 +137,22 @@ the effects those presets differ in. Notes from reading the code; none of these 
 - **Fill rate.** At 1920x1000 the pass touches about 1.9 million fragments, plus depth pre-pass
   overdraw from the floor under every box. The render-scale 0.75 on Low would cut fragments by 44%
   if it were applied (decision 0006 defers it).
+
+## Stress-scene materials, HDR on Low, render scale (M3 follow-ups)
+
+- **Materials in the stress scene.** The 200 boxes use 9 colours and the quantised per-part variation
+  (3 roughness x 3 brightness levels). That is at most 9 materials per colour and 81 overall; the
+  owner's `unique_materials=69` is a normal draw from that set, so the scene already batches the way
+  real robots will. `scene::quantised_variation` has a unit test that no uid gives more than 9 variations.
+- **`hdr true` on Low.** The camera was spawned with the `Hdr` component, and the start-up log read it
+  before the preset (applied through deferred commands) removed it, so the log lied for a few frames.
+  `Hdr` is now added only by the preset, and the log waits 4 frames. Measured under llvmpipe the Low log
+  line now reads `hdr false`.
+- **Low render scale 0.75 is still not applied.** Read of Bevy 0.20.1: `MainPassResolutionOverride` only
+  shrinks the main pass viewport inside a full-size texture and "does not affect post processing", so the
+  built-in tonemapping, FXAA and upscaling passes would still read the full texture; only DLSS-style
+  upscalers resample it. A general version needs the camera to render into an image of 0.75 size and a
+  second camera to blit it to the window with egui on the second camera, and the cursor, picking and
+  floor ray code to map window positions into the smaller target. That touches the camera input, picking
+  and egui, and cannot be verified without a real GPU. It is left for after the owner's `--disable`
+  attribution shows whether fill rate is the problem.

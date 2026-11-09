@@ -536,7 +536,11 @@ fn perf_log(
     }
     // Nested passes (names like `a/b`, children of a pass already counted) stay out of totals and
     // the text summary, so the same work is not counted twice. `perf.json` keeps them, flagged.
-    let gpu_total: f64 = gpu.iter().filter(|(p, _)| !p.contains('/')).map(|(_, v)| v).sum();
+    let gpu_total: f64 = gpu
+        .iter()
+        .filter(|(p, _)| !p.contains('/'))
+        .map(|(_, v)| v)
+        .sum();
     gpu.sort_by(|a, b| b.1.total_cmp(&a.1));
     cpu.sort_by(|a, b| b.1.total_cmp(&a.1));
     println!(
@@ -569,11 +573,13 @@ fn perf_log(
     }
     let list = |v: &[(String, f64)]| {
         v.iter()
-            .map(|(p, ms)| format!(
+            .map(|(p, ms)| {
+                format!(
                     "{{\"pass\":{},\"ms\":{ms:.4},\"nested\":{}}}",
                     json_str(p),
                     p.contains('/')
-                ))
+                )
+            })
             .collect::<Vec<_>>()
             .join(",")
     };
