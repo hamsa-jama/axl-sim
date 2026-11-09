@@ -541,11 +541,7 @@ fn perf_log(
     }
     // Nested passes (names like `a/b`, children of a pass already counted) stay out of totals and
     // the text summary, so the same work is not counted twice. `perf.json` keeps them, flagged.
-    let gpu_total: f64 = gpu
-        .iter()
-        .filter(|(p, _)| !p.contains('/'))
-        .map(|(_, v)| v)
-        .sum();
+    let gpu_total: f64 = gpu_top_level(&gpu).iter().map(|(_, v)| *v).sum();
     gpu.sort_by(|a, b| b.1.total_cmp(&a.1));
     cpu.sort_by(|a, b| b.1.total_cmp(&a.1));
     println!(
@@ -569,11 +565,8 @@ fn perf_log(
             }
         );
     } else {
-        println!(
-            "perf: gpu_total_ms={gpu_total:.2} frame_ms={avg:.2} (top-level passes only; nested a/b passes are children and excluded)"
-        );
-        for (p, v) in gpu.iter().filter(|(p, _)| !p.contains('/')).take(12) {
-            println!("perf: gpu {v:6.2} ms  {p}");
+        for line in gpu_summary_lines(&gpu, avg as f64) {
+            println!("{line}");
         }
     }
     let list = |v: &[(String, f64)]| {
@@ -582,7 +575,7 @@ fn perf_log(
                 format!(
                     "{{\"pass\":{},\"ms\":{ms:.4},\"nested\":{}}}",
                     json_str(p),
-                    p.contains('/')
+                    is_nested_pass(p)
                 )
             })
             .collect::<Vec<_>>()
@@ -618,4 +611,74 @@ fn perf_log(
         Err(e) => eprintln!("axl: could not write perf.json: {e}"),
     }
     exit.write(AppExit::Success);
+}
+
+/// Bevy names a pass `render/<pass>` and a child pass `render/<pass>/<child>`. Only the first form
+/// is a top-level pass; children are inside a parent's time and must not be added again.
+pub fn is_nested_pass(path: &str) -> bool {
+    let rest = path.strip_prefix("render/").unwrap_or(path);
+    rest.contains('/')
+}
+
+/// The top-level passes of a list of (path, ms), most expensive first.
+pub fn gpu_top_level(gpu: &[(String, f64)]) -> Vec<(String, f64)> {
+    let mut v: Vec<(String, f64)> = gpu
+        .iter()
+        .filter(|(p, _)| !is_nested_pass(p))
+        .cloned()
+        .collect();
+    v.sort_by(|a, b| b.1.total_cmp(&a.1));
+    v
+}
+
+/// The `perf: gpu ...` lines: the total next to the frame time, then each top-level pass by cost.
+pub fn gpu_summary_lines(gpu: &[(String, f64)], frame_ms: f64) -> Vec<String> {
+    let top = gpu_top_level(gpu);
+    let total: f64 = top.iter().map(|(_, v)| *v).sum();
+    let mut out = vec![format!(
+        "perf: gpu_total_ms={total:.2} frame_ms={frame_ms:.2} (top-level passes only; nested passes are children and excluded)"
+    )];
+    for (p, v) in top.iter().take(12) {
+        out.push(format!("perf: gpu {v:6.2} ms  {p}"));
+    }
+    out
+}
+
+#[cfg(test)]
+mod perf_summary_tests {
+    use super::*;
+
+    fn sample() -> Vec<(String, f64)> {
+        [
+            ("render/main_opaque_pass_3d", 20.7),
+            ("render/shadow_pass", 2.2),
+            ("render/main_pass", 24.0),
+            ("render/main_pass/main_opaque_pass_3d", 20.7),
+            ("render/bloom", 1.1),
+        ]
+        .iter()
+        .map(|(p, v)| (p.to_string(), *v))
+        .collect()
+    }
+
+    #[test]
+    fn only_children_are_nested() {
+        assert!(!is_nested_pass("render/main_opaque_pass_3d"));
+        assert!(is_nested_pass("render/main_pass/main_opaque_pass_3d"));
+        assert!(!is_nested_pass("main_opaque_pass_3d"));
+    }
+
+    #[test]
+    fn summary_prints_the_total_and_each_top_level_pass_by_cost() {
+        let lines = gpu_summary_lines(&sample(), 25.0);
+        assert!(
+            lines[0].starts_with("perf: gpu_total_ms=48.00 frame_ms=25.00"),
+            "{}",
+            lines[0]
+        );
+        assert_eq!(lines[1], "perf: gpu  24.00 ms  render/main_pass");
+        assert_eq!(lines[2], "perf: gpu  20.70 ms  render/main_opaque_pass_3d");
+        assert!(lines.iter().all(|l| !l.contains("main_pass/main_opaque")));
+        assert_eq!(lines.len(), 5);
+    }
 }
