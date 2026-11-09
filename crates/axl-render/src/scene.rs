@@ -199,9 +199,11 @@ impl PartMaterials {
         micro_on: bool,
     ) -> Handle<StandardMaterial> {
         let var = part_variation(uid);
-        // Quantise so parts with near-identical variation share a material (batching).
-        let rq = (var.roughness_delta * 100.0).round() as i32;
-        let bq = ((var.brightness_scale - 1.0) * 1000.0).round() as i32;
+        // Quantise to three levels each (minus, none, plus) so that parts with similar variation
+        // share a material: separate materials cannot batch, and 200 unique ones cost 200 draws in
+        // every pass. Rounding to 0.03 roughness and 1.5% brightness steps keeps the spec's range.
+        let rq = (var.roughness_delta / 0.03).round() as i32 * 3;
+        let bq = ((var.brightness_scale - 1.0) / 0.015).round() as i32 * 15;
         let key = (0, kind, rgb, rq, bq);
         if let Some(h) = self.cache.get(&key) {
             return h.clone();
@@ -258,6 +260,7 @@ impl PartMaterials {
 /// Switch the micro-surface normal map on or off on every plastic material when the preset changes.
 pub fn apply_micro_surface(
     quality: Option<Res<ActiveQuality>>,
+    disable: Res<crate::diagnostics::DisableSet>,
     parts: Option<Res<PartMaterials>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut last: Local<Option<bool>>,
@@ -265,7 +268,7 @@ pub fn apply_micro_surface(
     let (Some(quality), Some(parts)) = (quality, parts) else {
         return;
     };
-    let on = quality.0.settings().micro_surface;
+    let on = quality.0.settings().micro_surface && !disable.micro_normal;
     if *last == Some(on) {
         return;
     }

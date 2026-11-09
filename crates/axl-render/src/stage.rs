@@ -48,6 +48,10 @@ pub struct RenderOptions {
     pub camera_mode: crate::camera_rig::CameraMode,
     /// Replace the scene's camera: focus (m, AXL), yaw, pitch (degrees) and distance (m).
     pub camera_pose: Option<CameraHome>,
+    /// Effects to switch off (`--disable`, `--safe-render`).
+    pub disable: crate::diagnostics::DisableSet,
+    /// Why `quality` is what it is, for the start-up log.
+    pub quality_reason: String,
 }
 
 impl Default for RenderOptions {
@@ -61,6 +65,8 @@ impl Default for RenderOptions {
             view_mode: crate::grid::ViewMode::Builder,
             camera_mode: crate::camera_rig::CameraMode::Orbit,
             camera_pose: None,
+            disable: Default::default(),
+            quality_reason: "default".into(),
         }
     }
 }
@@ -102,6 +108,8 @@ struct Benchmark(BenchmarkRun);
 #[derive(Resource)]
 struct PerfLog {
     seconds: f32,
+    waited: f32,
+    started: Option<std::time::Instant>,
     elapsed: f32,
     frames: u32,
     times_ms: Vec<f32>,
@@ -119,12 +127,22 @@ impl Plugin for StagePlugin {
             .insert_resource(opts.camera_mode)
             .insert_resource(StartPose(opts.camera_pose))
             .insert_resource(ActiveQuality(opts.quality))
+            .insert_resource(opts.disable)
+            .insert_resource(crate::diagnostics::QualityReason(
+                opts.quality_reason.clone(),
+            ))
+            .add_plugins(crate::diagnostics::DiagnosticsPlugin)
             .insert_resource(GlobalAmbientLight::NONE)
             .insert_resource(PartLibrary::load())
             .init_resource::<SnapshotBuffer>()
             .init_resource::<crate::sync::PlaybackSpeed>()
             .add_message::<BenchmarkFinished>()
-            .add_plugins((crate::grid::GridPlugin, crate::camera_rig::CameraRigPlugin))
+            .add_plugins((
+                crate::grid::GridPlugin,
+                crate::camera_rig::CameraRigPlugin {
+                    no_picking: opts.disable.picking,
+                },
+            ))
             .add_systems(
                 Update,
                 (crate::sync::sync_bodies, crate::scene::apply_micro_surface),
@@ -159,8 +177,11 @@ impl Plugin for StagePlugin {
             app.add_systems(Update, run_benchmark);
         }
         if let Some(seconds) = opts.perf_seconds {
+            app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
             app.insert_resource(PerfLog {
                 seconds,
+                waited: 0.0,
+                started: None,
                 elapsed: 0.0,
                 frames: 0,
                 times_ms: Vec::new(),
@@ -182,19 +203,24 @@ fn setup_stage(
     lighting: Res<LightingConfig>,
     grid: Res<GridSettings>,
     quality: Res<ActiveQuality>,
+    disable: Res<crate::diagnostics::DisableSet>,
     scene: Option<Res<SceneDef>>,
     stress: Option<Res<StressBoxes>>,
     start_pose: Res<StartPose>,
 ) {
     let root = spawn_root(&mut commands);
-    spawn_floor(
-        &mut commands,
-        root,
-        &mut meshes,
-        &mut grid_mats,
-        &lighting,
-        &grid,
-    );
+    if disable.grid {
+        crate::grid::spawn_plain_floor(&mut commands, root, &mut meshes, &mut std_mats, &lighting);
+    } else {
+        spawn_floor(
+            &mut commands,
+            root,
+            &mut meshes,
+            &mut grid_mats,
+            &lighting,
+            &grid,
+        );
+    }
 
     let mut parts = PartMaterials::new(&mut images);
     let mut home = CameraHome::default();
@@ -205,7 +231,7 @@ fn setup_stage(
             materials: &mut std_mats,
             parts: &mut parts,
             lib: &mut lib,
-            micro_on: quality.0.settings().micro_surface,
+            micro_on: quality.0.settings().micro_surface && !disable.micro_normal,
         };
         if let Some(scene) = scene {
             home = scene.home();
@@ -227,7 +253,14 @@ fn setup_stage(
     commands.insert_resource(parts);
     commands.insert_resource(FocusTarget(focus));
     commands.insert_resource(home);
-    spawn_view_camera(&mut commands, &mut images, &lighting, &home, quality.0);
+    spawn_view_camera(
+        &mut commands,
+        &mut images,
+        &lighting,
+        &home,
+        quality.0,
+        &disable,
+    );
 }
 
 /// Scripted motion for the stress boxes, published as snapshots the same way the sim thread will.
@@ -260,12 +293,21 @@ fn stress_source(
 }
 
 fn lookdev_capture(
+    ready: Res<crate::diagnostics::ReadyFrames>,
     mut commands: Commands,
     mut cap: ResMut<LookdevCapture>,
     mut exit: MessageWriter<AppExit>,
 ) {
     cap.frame += 1;
-    if cap.requested_at.is_none() && cap.frame >= settle_frames() {
+    let steady = ready.0 >= crate::diagnostics::READY_FRAMES;
+    let timed_out = cap.frame >= settle_frames() + 3000;
+    if timed_out && cap.requested_at.is_none() && !steady {
+        tracing::error!(
+            "screenshot: pipelines were still compiling after {} frames; capturing anyway, the image may be incomplete",
+            cap.frame
+        );
+    }
+    if cap.requested_at.is_none() && cap.frame >= settle_frames() && (steady || timed_out) {
         cap.requested_at = Some(cap.frame);
         let path = cap.path.clone();
         if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
@@ -291,8 +333,14 @@ fn lookdev_capture(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_benchmark(
+    mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+    mut saved_mode: Local<Option<bevy::window::PresentMode>>,
     time: Res<Time<Real>>,
+    ready: Res<crate::diagnostics::ReadyFrames>,
+    mut waited: Local<f32>,
+    mut started: Local<bool>,
     mut bench: ResMut<Benchmark>,
     mut quality: ResMut<ActiveQuality>,
     mut done: Local<bool>,
@@ -301,42 +349,252 @@ fn run_benchmark(
     if *done {
         return;
     }
+    if !*started {
+        *started = true;
+        // With vsync on, every frame takes at least one refresh interval (16.7 ms at 60 Hz) and
+        // the benchmark could never tell a fast GPU from a slow one. Measure with it off.
+        if let Ok(mut w) = windows.single_mut() {
+            *saved_mode = Some(w.present_mode);
+            w.present_mode = bevy::window::PresentMode::AutoNoVsync;
+        }
+        tracing::info!(
+            "benchmark: started (measures the look-dev scene for a few seconds, then picks a preset)"
+        );
+    }
+    *waited += time.delta_secs();
+    // Measure only once pipelines have compiled and the environment is filtered.
+    if ready.0 < crate::diagnostics::READY_FRAMES && *waited <= 120.0 {
+        return;
+    }
+    if *waited > 120.0 {
+        *done = true;
+        if let (Ok(mut w), Some(m)) = (windows.single_mut(), saved_mode.take()) {
+            w.present_mode = m;
+        }
+        tracing::warn!(
+            "benchmark: gave up after {:.0} s without finishing (frames are too slow or stalled); keeping {}",
+            *waited,
+            quality.0.label()
+        );
+        return;
+    }
     if let Some((preset, avg_ms)) = bench.0.push_frame(time.delta_secs()) {
         *done = true;
+        if let (Ok(mut w), Some(m)) = (windows.single_mut(), saved_mode.take()) {
+            w.present_mode = m;
+        }
         quality.0 = preset;
         finished.write(BenchmarkFinished { preset, avg_ms });
         tracing::info!(
-            "benchmark: {avg_ms:.1} ms per frame, chose {}",
+            "benchmark thresholds (ms per frame): Ultra <= {:.1}, High <= {:.1}, Medium <= {:.1}, else Low",
+            bench.0.config().ultra_max_ms,
+            bench.0.config().high_max_ms,
+            bench.0.config().medium_max_ms
+        );
+        tracing::info!(
+            "benchmark: {avg_ms:.1} ms per frame ({:.1} fps), chose {}",
+            1000.0 / avg_ms.max(1e-3),
             preset.label()
         );
     }
 }
 
+/// Mean and percentile of a sorted slice.
+fn pct(sorted: &[f32], p: f32) -> f32 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let i = ((sorted.len() as f32 * p) as usize).min(sorted.len() - 1);
+    sorted[i]
+}
+
+fn mean(v: &[f32]) -> f32 {
+    v.iter().sum::<f32>() / v.len().max(1) as f32
+}
+
+/// Escape a string for JSON.
+fn json_str(s: &str) -> String {
+    let mut out = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if (c as u32) < 0x20 => out.push(' '),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+#[allow(clippy::too_many_arguments)]
 fn perf_log(
     time: Res<Time<Real>>,
+    ready: Res<crate::diagnostics::ReadyFrames>,
+    drawn: Query<(&Mesh3d, &MeshMaterial3d<StandardMaterial>)>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    shared: Res<crate::diagnostics::PerfShared>,
+    disable: Res<crate::diagnostics::DisableSet>,
+    store: Res<bevy::diagnostic::DiagnosticsStore>,
     mut log: ResMut<PerfLog>,
     quality: Res<ActiveQuality>,
     mut exit: MessageWriter<AppExit>,
 ) {
     log.frames += 1;
-    // Skip the first second: shader compilation and environment filtering.
-    log.elapsed += time.delta_secs();
-    if log.elapsed > 1.0 {
-        log.times_ms.push(time.delta_secs() * 1000.0);
+    // Measure only in steady state: no pipeline compiling for READY_FRAMES frames in a row.
+    // After 60 s of waiting the run measures anyway and says so.
+    log.waited += time.delta_secs();
+    let steady = ready.0 >= crate::diagnostics::READY_FRAMES;
+    if !steady && log.waited < 60.0 {
+        return;
     }
-    if log.elapsed >= log.seconds + 1.0 {
-        let mut t = log.times_ms.clone();
-        t.sort_by(|a, b| a.total_cmp(b));
-        let n = t.len().max(1);
-        let avg = t.iter().sum::<f32>() / n as f32;
-        let p95 = t.get((n as f32 * 0.95) as usize).copied().unwrap_or(0.0);
-        let p99 = t.get((n as f32 * 0.99) as usize).copied().unwrap_or(0.0);
-        println!(
-            "perf: preset={} frames={} avg_ms={avg:.2} fps={:.1} p95_ms={p95:.2} p99_ms={p99:.2}",
-            quality.0.label(),
-            t.len(),
-            1000.0 / avg.max(1e-6),
+    if !steady && log.elapsed == 0.0 {
+        tracing::error!(
+            "perf: pipelines never settled in 60 s; measuring anyway, compile hitches are included"
         );
-        exit.write(AppExit::Success);
     }
+    log.started.get_or_insert_with(std::time::Instant::now);
+    log.elapsed += time.delta_secs();
+    log.times_ms.push(time.delta_secs() * 1000.0);
+    if log.elapsed < log.seconds {
+        return;
+    }
+    let mut t = log.times_ms.clone();
+    t.sort_by(|a, b| a.total_cmp(b));
+    let n = t.len().max(1);
+    let avg = mean(&t);
+    let (p50, p95, p99) = (pct(&t, 0.50), pct(&t, 0.95), pct(&t, 0.99));
+    let fps = 1000.0 / avg.max(1e-6);
+    println!(
+        "perf: preset={} frames={} avg_ms={avg:.2} fps={fps:.1} p95_ms={p95:.2} p99_ms={p99:.2}",
+        quality.0.label(),
+        n,
+    );
+    let meshes: std::collections::HashSet<_> = drawn.iter().map(|(m, _)| m.0.id()).collect();
+    let mats: std::collections::HashSet<_> = drawn.iter().map(|(_, m)| m.0.id()).collect();
+    println!(
+        "perf: drawn={} unique_meshes={} unique_materials={} (batches are at most meshes x materials)",
+        drawn.iter().count(),
+        meshes.len(),
+        mats.len()
+    );
+    let (res, present) = windows
+        .single()
+        .map(|w| {
+            (
+                (
+                    w.resolution.physical_width(),
+                    w.resolution.physical_height(),
+                ),
+                format!("{:?}", w.present_mode),
+            )
+        })
+        .unwrap_or(((0, 0), "unknown".into()));
+    let (adapter, backend, device_type, driver, timestamps, main_ms, render_ms) = shared
+        .data
+        .lock()
+        .map(|d| {
+            // Drop the first second of samples to match the frame-time window (about 60 per second).
+            let skip = |v: &Vec<f32>| {
+                v.iter()
+                    .skip(v.len().saturating_sub(n))
+                    .copied()
+                    .collect::<Vec<f32>>()
+            };
+            (
+                d.adapter.clone(),
+                d.backend.clone(),
+                d.device_type.clone(),
+                d.driver.clone(),
+                d.timestamps,
+                skip(&d.main_ms),
+                skip(&d.render_ms),
+            )
+        })
+        .unwrap_or_default();
+    // Per-pass times from Bevy's render diagnostics (GPU needs timestamp queries).
+    let mut gpu: Vec<(String, f64)> = Vec::new();
+    let mut cpu: Vec<(String, f64)> = Vec::new();
+    for d in store.iter() {
+        let path = d.path().as_str().to_string();
+        // A pass that stopped running (the one-off environment filter) keeps its last samples;
+        // leave those out of a steady-state report.
+        let fresh = match (d.measurement(), log.started) {
+            (Some(m), Some(s)) => m.time >= s,
+            _ => true,
+        };
+        if !fresh {
+            continue;
+        }
+        if let Some(v) = d.average() {
+            if let Some(p) = path.strip_suffix("/elapsed_gpu") {
+                gpu.push((p.to_string(), v));
+            } else if let Some(p) = path.strip_suffix("/elapsed_cpu") {
+                cpu.push((p.to_string(), v));
+            }
+        }
+    }
+    gpu.sort_by(|a, b| b.1.total_cmp(&a.1));
+    cpu.sort_by(|a, b| b.1.total_cmp(&a.1));
+    println!(
+        "perf: adapter={adapter:?} backend={backend} type={device_type} present_mode={present} resolution={}x{} disabled={:?}",
+        res.0,
+        res.1,
+        disable.names()
+    );
+    println!(
+        "perf: cpu main_ms={:.2} render_ms={:.2} (main thread and render thread, per frame)",
+        mean(&main_ms),
+        mean(&render_ms)
+    );
+    if gpu.is_empty() {
+        println!(
+            "perf: gpu per-pass times unavailable ({}); only CPU times are reported",
+            if timestamps {
+                "no GPU timestamps were recorded"
+            } else {
+                "adapter has no timestamp queries; they need Vulkan or DX12"
+            }
+        );
+    } else {
+        for (p, v) in gpu.iter().take(12) {
+            println!("perf: gpu {v:6.2} ms  {p}");
+        }
+    }
+    let list = |v: &[(String, f64)]| {
+        v.iter()
+            .map(|(p, ms)| format!("{{\"pass\":{},\"ms\":{ms:.4}}}", json_str(p)))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let json = format!(
+        "{{\"adapter\":{},\"backend\":{},\"device_type\":{},\"driver\":{},\"preset\":{},\"resolution\":[{},{}],\"present_mode\":{},\"disabled\":[{}],\"frames\":{n},\"frame_ms\":{{\"mean\":{avg:.3},\"p50\":{p50:.3},\"p95\":{p95:.3},\"p99\":{p99:.3}}},\"fps\":{fps:.2},\"cpu_ms\":{{\"main\":{:.3},\"render\":{:.3}}},\"gpu_timestamps\":{},\"gpu_passes\":[{}],\"cpu_passes\":[{}],\"drawn\":{},\"unique_meshes\":{},\"unique_materials\":{}}}\n",
+        json_str(&adapter),
+        json_str(&backend),
+        json_str(&device_type),
+        json_str(&driver),
+        json_str(quality.0.label()),
+        res.0,
+        res.1,
+        json_str(&present),
+        disable
+            .names()
+            .iter()
+            .map(|s| json_str(s))
+            .collect::<Vec<_>>()
+            .join(","),
+        mean(&main_ms),
+        mean(&render_ms),
+        !gpu.is_empty(),
+        list(&gpu),
+        list(&cpu),
+        drawn.iter().count(),
+        meshes.len(),
+        mats.len(),
+    );
+    match std::fs::write("perf.json", json) {
+        Ok(()) => println!("perf: wrote perf.json"),
+        Err(e) => eprintln!("axl: could not write perf.json: {e}"),
+    }
+    exit.write(AppExit::Success);
 }

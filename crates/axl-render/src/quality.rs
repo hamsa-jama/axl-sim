@@ -215,6 +215,11 @@ pub struct BenchmarkRun {
 }
 
 impl BenchmarkRun {
+    /// The thresholds in use.
+    pub fn config(&self) -> &BenchmarkConfig {
+        &self.config
+    }
+
     /// Start a run.
     pub fn new(config: BenchmarkConfig) -> Self {
         Self {

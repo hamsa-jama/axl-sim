@@ -264,6 +264,33 @@ pub fn spawn_floor(
     floor
 }
 
+/// A plain lit floor with no custom shader (`--disable grid`).
+pub fn spawn_plain_floor(
+    commands: &mut Commands,
+    root: Entity,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    lighting: &LightingConfig,
+) -> Entity {
+    let floor = commands
+        .spawn((
+            GridFloor,
+            Name::new("plain_floor"),
+            Mesh3d(meshes.add(floor_mesh(FLOOR_SIZE_M))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: srgb(lighting.floor.base_srgb),
+                perceptual_roughness: lighting.floor.roughness,
+                reflectance: lighting.floor.reflectance,
+                ..default()
+            })),
+            Transform::default(),
+            NotShadowCaster,
+        ))
+        .id();
+    commands.entity(root).add_child(floor);
+    floor
+}
+
 fn track_cursor(
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform), With<crate::camera_rig::ViewCamera>>,

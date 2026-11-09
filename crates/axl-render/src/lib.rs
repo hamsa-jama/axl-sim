@@ -13,6 +13,7 @@
 pub mod browser;
 pub mod camera_input;
 pub mod camera_rig;
+pub mod diagnostics;
 pub mod frames;
 pub mod grid;
 pub mod grid_math;

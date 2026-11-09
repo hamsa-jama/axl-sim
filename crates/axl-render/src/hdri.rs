@@ -28,7 +28,7 @@ pub struct Equirect {
 /// Decode a Radiance `.hdr` file (`-Y h +X w` orientation only, flat or new-style RLE).
 pub fn decode_radiance(bytes: &[u8]) -> Result<Equirect, String> {
     let mut pos = 0;
-    let mut line = |pos: &mut usize| -> Option<&[u8]> {
+    let line = |pos: &mut usize| -> Option<&[u8]> {
         let start = *pos;
         let nl = bytes[start..].iter().position(|&b| b == b'\n')?;
         *pos = start + nl + 1;

@@ -1,10 +1,13 @@
 //! The desktop window (Bevy + egui). Needs a display and a GPU.
 
 use axl_render::bevy::prelude::*;
+use axl_render::bevy::render::RenderPlugin;
+use axl_render::bevy::render::settings::{PowerPreference, RenderCreation, WgpuSettings};
 use axl_render::bevy::window::PresentMode;
 use axl_render::camera_rig::{
     ActiveQuality, CameraHome, CameraMode, CameraSettings, UiCapture, ViewCamera, gizmo_axes,
 };
+use axl_render::diagnostics::DisableSet;
 use axl_render::grid::{CursorOnFloor, GridSettings, Measure, ViewMode};
 use axl_render::grid_math::GridUnits;
 use axl_render::quality::QualityPreset;
@@ -28,6 +31,7 @@ struct SettingsStore {
 
 /// Open the AXL window and run until it is closed.
 pub fn run(args: &Args) -> AppExit {
+    install_gpu_panic_hook();
     // Screenshot, stress and perf runs never read or write the user's settings.
     let scripted = args.lookdev
         || args.parts.is_some()
@@ -51,8 +55,39 @@ pub fn run(args: &Args) -> AppExit {
         eprintln!("axl: unknown quality {q:?}; use low, medium, high or ultra");
     }
     let quality = forced.or(current.quality).unwrap_or(QualityPreset::High);
+    let reason = if forced.is_some() {
+        "from --quality".to_string()
+    } else if current.quality.is_some() {
+        "saved in settings.ron".to_string()
+    } else {
+        "default; the first-launch benchmark may change it".to_string()
+    };
     // The first-launch benchmark runs only for a normal start with nothing saved.
     let benchmark = !scripted && forced.is_none() && current.quality.is_none();
+    if benchmark {
+        eprintln!("axl: benchmark: will run on this start (no saved quality, no --quality)");
+    } else {
+        let why = if scripted {
+            "scripted run (--lookdev, --stress-boxes, --perf-seconds or --screenshot)"
+        } else if forced.is_some() {
+            "--quality was given"
+        } else {
+            "quality already saved in settings.ron"
+        };
+        eprintln!("axl: benchmark: skipped, {why}");
+    }
+    let disable = if args.safe_render {
+        DisableSet::all()
+    } else {
+        match args.disable.as_deref().map(DisableSet::parse) {
+            Some(Ok(d)) => d,
+            Some(Err(e)) => {
+                eprintln!("axl: --disable: {e}");
+                return AppExit::error();
+            }
+            None => DisableSet::default(),
+        }
+    };
 
     let options = RenderOptions {
         quality,
@@ -82,6 +117,8 @@ pub fn run(args: &Args) -> AppExit {
             _ => CameraMode::Orbit,
         },
         camera_pose: args.camera_pose.as_deref().and_then(parse_pose),
+        disable,
+        quality_reason: reason,
     };
 
     let size = args
@@ -92,30 +129,42 @@ pub fn run(args: &Args) -> AppExit {
         .filter(|(w, h)| *w >= 320 && *h >= 240);
     let big_window = args.lookdev || args.stress_boxes.is_some() || args.parts.is_some();
     let mut app = App::new();
+    // Ask for the high-performance (discrete) adapter on hybrid-graphics laptops. WGPU_POWER_PREF
+    // and WGPU_BACKEND in the environment still override this, so the owner can test other adapters.
+    let wgpu = WgpuSettings {
+        power_preference: PowerPreference::from_env().unwrap_or(PowerPreference::HighPerformance),
+        ..default()
+    };
     app.add_plugins(
-        DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "AXL".into(),
-                resolution: size
-                    .unwrap_or(if big_window {
-                        (1920, 1080)
+        DefaultPlugins
+            .set(RenderPlugin {
+                render_creation: RenderCreation::Automatic(Box::new(wgpu)),
+                ..default()
+            })
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "AXL".into(),
+                    resolution: size
+                        .unwrap_or(if big_window {
+                            (1920, 1080)
+                        } else {
+                            (1280, 800)
+                        })
+                        .into(),
+                    // Frame-rate checks must not be capped by the monitor.
+                    present_mode: if args.perf_seconds.is_some() {
+                        PresentMode::AutoNoVsync
                     } else {
-                        (1280, 800)
-                    })
-                    .into(),
-                // Frame-rate checks must not be capped by the monitor.
-                present_mode: if args.perf_seconds.is_some() {
-                    PresentMode::AutoNoVsync
-                } else {
-                    PresentMode::AutoVsync
-                },
+                        PresentMode::AutoVsync
+                    },
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }),
     )
     .add_plugins(EguiPlugin::default())
     .insert_resource(FramesLeft(args.exit_after_frames))
+    .insert_resource(ExitAfterBenchmark(args.exit_after_benchmark))
     .insert_resource(GridSettings {
         units: match args.units.as_deref() {
             Some("metric") => GridUnits::Metric,
@@ -145,6 +194,24 @@ pub fn run(args: &Args) -> AppExit {
         (control_bar, status_bar, gizmo_overlay).chain(),
     );
     app.run()
+}
+
+/// Bevy panics with "Unable to find a GPU!" when no adapter matches. Say what to do about it.
+fn install_gpu_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if info.to_string().contains("Unable to find a GPU") {
+            match std::env::var("WGPU_BACKEND") {
+                Ok(b) if !b.is_empty() => eprintln!(
+                    "axl: no graphics adapter was found for WGPU_BACKEND={b}. This build only includes the Vulkan, DirectX 12 and Metal backends (not OpenGL). Unset WGPU_BACKEND, or set it to vulkan, dx12 or metal."
+                ),
+                _ => eprintln!(
+                    "axl: no usable graphics adapter was found. Check that the GPU driver is installed (on Linux, Vulkan: run vulkaninfo --summary), then try again."
+                ),
+            }
+        }
+        previous(info);
+    }));
 }
 
 /// Parse `fx,fy,fz,yaw,pitch,distance` (mm and degrees) into a camera home.
@@ -381,12 +448,33 @@ fn exit_when_done(mut left: ResMut<FramesLeft>, mut exit: MessageWriter<AppExit>
 fn remember_benchmark(
     mut done: MessageReader<BenchmarkFinished>,
     mut store: ResMut<SettingsStore>,
+    exit_after: Res<ExitAfterBenchmark>,
+    mut exit: MessageWriter<AppExit>,
 ) {
     for d in done.read() {
         store.current.quality = Some(d.preset);
         save(&store);
+        match &store.path {
+            Some(p) => eprintln!(
+                "axl: benchmark chose {} ({:.1} ms per frame); saved to {}",
+                d.preset.label(),
+                d.avg_ms,
+                p.display()
+            ),
+            None => eprintln!(
+                "axl: benchmark chose {} (settings not saved)",
+                d.preset.label()
+            ),
+        }
+        if exit_after.0 {
+            exit.write(AppExit::Success);
+        }
     }
 }
+
+/// Exit once the first-launch benchmark has reported (`--exit-after-benchmark`).
+#[derive(Resource)]
+struct ExitAfterBenchmark(bool);
 
 /// Save settings whenever the user changes a persisted option.
 fn persist_settings(
