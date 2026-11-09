@@ -27,6 +27,8 @@ pub enum StageContent {
     Stress(usize),
     /// The part browser: a contact sheet of the parts matching the filter (empty shows all).
     Parts(crate::browser::BrowserState),
+    /// The Builder screen: an empty robot to build on the grid floor.
+    Builder,
 }
 
 /// Everything the render plugin needs at start-up.
@@ -154,6 +156,9 @@ impl Plugin for StagePlugin {
             }
             StageContent::Parts(state) => {
                 app.add_plugins(crate::browser::BrowserPlugin(state.clone()));
+            }
+            StageContent::Builder => {
+                app.add_plugins(crate::builder_view::BuilderPlugin);
             }
             StageContent::Stress(n) => {
                 app.insert_resource(StressBoxes(*n));

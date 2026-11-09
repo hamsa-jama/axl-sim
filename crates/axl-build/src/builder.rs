@@ -70,6 +70,9 @@ pub struct Builder {
     pub ghost: Option<Ghost>,
     /// What the ghost is.
     pub ghost_kind: GhostKind,
+    /// "Underneath" aiming (`U`): the cursor ray goes through the robot to its underside, so a part
+    /// can hang below a plate that rests on the floor.
+    pub underneath: bool,
     /// Counts every change of the assembly (autosave and renderer watch it).
     pub rev: u64,
     undo: Vec<(String, Assembly)>,
@@ -96,6 +99,7 @@ impl Builder {
             selection: vec![],
             ghost: None,
             ghost_kind: GhostKind::New,
+            underneath: false,
             rev: 0,
             undo: vec![],
             redo: vec![],
@@ -132,6 +136,11 @@ impl Builder {
     /// Collision shapes per part.
     pub fn prims(&self) -> &[(u32, Vec<(u8, WPrim)>)] {
         &self.ctx.prims
+    }
+
+    /// The surface under a cursor ray (a part's collision bounds or the floor).
+    pub fn hit(&self, ray: &Ray) -> Option<Hit> {
+        self.ctx.hit(ray)
     }
 
     /// The lowest point of the robot, mm.
@@ -213,6 +222,7 @@ impl Builder {
             None => def.colors[0].clone(),
         };
         self.cancel();
+        self.underneath = false;
         self.ghost = Some(Ghost::single(&part_id, &color));
         self.ghost_kind = GhostKind::New;
         Ok(())
@@ -317,7 +327,11 @@ impl Builder {
         ghost.valid = false;
         ghost.problem = None;
         ghost.placed = false;
-        let hit = self.ctx.hit(ray);
+        let hit = if self.underneath {
+            self.ctx.hit_far(ray)
+        } else {
+            self.ctx.hit(ray)
+        };
         if let (Some(hit), Some((lo, hi))) = (hit, ghost.bounds_rel(&self.catalog)) {
             let free = free_anchor(&hit, lo, hi);
             ghost.placed = true;

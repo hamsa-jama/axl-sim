@@ -416,6 +416,7 @@ name = "axl-app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axl-build",
  "axl-render",
  "bevy",
  "bevy_egui",
@@ -477,6 +478,7 @@ dependencies = [
 name = "axl-render"
 version = "0.1.0"
 dependencies = [
+ "axl-build",
  "axl-parts",
  "bevy",
  "ron",

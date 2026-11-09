@@ -11,6 +11,7 @@
 #![warn(missing_docs)]
 
 pub mod browser;
+pub mod builder_view;
 pub mod camera_input;
 pub mod camera_rig;
 pub mod diagnostics;

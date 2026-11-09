@@ -16,8 +16,6 @@ use crate::place::Ray;
 pub enum Aim {
     /// From above, straight down at (x, y).
     Down(f64, f64),
-    /// From below, straight up at (x, y).
-    Up(f64, f64),
     /// From the +Y side, heading -Y, at (x, z).
     FromPosY(f64, f64),
     /// From the -Y side, heading +Y, at (x, z).
@@ -28,7 +26,6 @@ impl Aim {
     fn ray(self) -> Ray {
         let (origin, dir) = match self {
             Aim::Down(x, y) => ([x, y, 400.0], [0.0, 0.0, -1.0]),
-            Aim::Up(x, y) => ([x, y, -400.0], [0.0, 0.0, 1.0]),
             Aim::FromPosY(x, z) => ([x, 400.0, z], [0.0, -1.0, 0.0]),
             Aim::FromNegY(x, z) => ([x, -400.0, z], [0.0, 1.0, 0.0]),
         };
@@ -47,6 +44,8 @@ pub struct Step {
     pub turns: &'static str,
     /// Cursor.
     pub aim: Aim,
+    /// Aim through the robot to its underside (the `U` key).
+    pub under: bool,
     /// New device name, if the learner renames it.
     pub name: Option<&'static str>,
     /// New port, if the learner changes it.
@@ -59,6 +58,7 @@ fn step(part: &'static str, color: &'static str, turns: &'static str, aim: Aim) 
         color,
         turns,
         aim,
+        under: false,
         name: None,
         port: None,
     }
@@ -66,6 +66,11 @@ fn step(part: &'static str, color: &'static str, turns: &'static str, aim: Aim) 
 
 fn named(mut s: Step, name: &'static str) -> Step {
     s.name = Some(name);
+    s
+}
+
+fn below(mut s: Step) -> Step {
+    s.under = true;
     s
 }
 
@@ -91,14 +96,24 @@ pub fn rover_steps() -> Vec<Step> {
         // Motors: the output face points outward (+Y on the left, -Y on the right).
         on_port(
             named(
-                step("motor_medium", "light_grey", "", Aim::Up(4.0, 37.25)),
+                below(step(
+                    "motor_medium",
+                    "light_grey",
+                    "",
+                    Aim::Down(4.0, 37.25),
+                )),
                 "left",
             ),
             Port::A,
         ),
         on_port(
             named(
-                step("motor_medium", "light_grey", "RR", Aim::Up(4.0, -37.25)),
+                below(step(
+                    "motor_medium",
+                    "light_grey",
+                    "RR",
+                    Aim::Down(4.0, -37.25),
+                )),
                 "right",
             ),
             Port::B,
@@ -108,12 +123,12 @@ pub fn rover_steps() -> Vec<Step> {
         step("wheel_56", "white", "T", Aim::FromPosY(4.0, -12.0)),
         step("wheel_56", "white", "T", Aim::FromNegY(4.0, -12.0)),
         // Caster stack at the back: two 2x2 bricks lift the ball to the wheels' floor line.
-        step("brick_2x2", "red", "", Aim::Up(-24.0, 0.0)),
-        step("brick_2x2", "red", "", Aim::Up(-24.0, 0.0)),
-        step("caster_ball", "dark_grey", "", Aim::Up(-24.0, 0.0)),
+        below(step("brick_2x2", "red", "", Aim::Down(-24.0, 0.0))),
+        below(step("brick_2x2", "red", "", Aim::Down(-24.0, 0.0))),
+        below(step("caster_ball", "dark_grey", "", Aim::Down(-24.0, 0.0))),
         on_port(
             named(
-                step("sensor_color", "white", "", Aim::Up(24.0, 0.0)),
+                below(step("sensor_color", "white", "", Aim::Down(24.0, 0.0))),
                 "color",
             ),
             Port::D,
@@ -133,6 +148,7 @@ pub fn test_chassis_steps() -> Vec<Step> {
 pub fn run_steps(b: &mut Builder, steps: &[Step]) -> Result<(), BuildError> {
     for s in steps {
         b.start_place(s.part, Some(s.color))?;
+        b.underneath = s.under;
         for key in s.turns.chars() {
             b.rotate_ghost(match key {
                 'R' => TurnAxis::Z,

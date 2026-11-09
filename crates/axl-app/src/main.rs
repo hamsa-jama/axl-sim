@@ -4,6 +4,8 @@
 
 #[cfg(feature = "gui")]
 mod browser_ui;
+#[cfg(feature = "gui")]
+mod builder_ui;
 mod cli;
 #[cfg(feature = "gui")]
 mod gui;

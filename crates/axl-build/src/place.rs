@@ -92,6 +92,26 @@ pub fn ray_aabb(ray: &Ray, lo: [f64; 3], hi: [f64; 3]) -> Option<(f64, usize, bo
     Some((t0, face.0, face.1))
 }
 
+/// Ray against an axis-aligned box: exit distance and the face the ray leaves through.
+pub fn ray_aabb_far(ray: &Ray, lo: [f64; 3], hi: [f64; 3]) -> Option<(f64, usize, bool)> {
+    let (t0, ..) = ray_aabb(ray, lo, hi)?;
+    let mut t1 = f64::MAX;
+    let mut face = (0usize, true);
+    for k in 0..3 {
+        let d = ray.dir[k];
+        if d.abs() < 1e-12 {
+            continue;
+        }
+        let (a, b) = ((lo[k] - ray.origin[k]) / d, (hi[k] - ray.origin[k]) / d);
+        let (exit, positive) = if d > 0.0 { (b, true) } else { (a, false) };
+        if exit < t1 {
+            t1 = exit;
+            face = (k, positive);
+        }
+    }
+    (t1 >= t0).then_some((t1, face.0, face.1))
+}
+
 /// One part of the ghost.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GhostItem {
@@ -178,6 +198,30 @@ impl Context {
             floor_z,
             count: asm.parts.len(),
         }
+    }
+
+    /// "Underneath" aiming: the far side of the last part the ray passes through (the underside of
+    /// a robot seen from above), or the floor when the ray misses every part.
+    pub fn hit_far(&self, ray: &Ray) -> Option<Hit> {
+        let mut best: Option<Hit> = None;
+        for (uid, ps) in &self.prims {
+            for (_, p) in ps {
+                let (lo, hi) = p.aabb();
+                if let Some((t, axis, positive)) = ray_aabb_far(ray, lo, hi)
+                    && best.as_ref().is_none_or(|b| t > b.t)
+                {
+                    let point = [0, 1, 2].map(|k| ray.origin[k] + ray.dir[k] * t);
+                    best = Some(Hit {
+                        point,
+                        axis,
+                        positive,
+                        uid: Some(*uid),
+                        t,
+                    });
+                }
+            }
+        }
+        best.or_else(|| self.hit(ray))
     }
 
     /// Nearest surface under a ray: a part's collision bounds or the floor.
