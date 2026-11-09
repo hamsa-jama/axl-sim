@@ -69,6 +69,12 @@ pub struct Args {
     #[arg(long, value_name = "LIST", conflicts_with = "headless")]
     pub disable: Option<String>,
 
+    /// Diagnostic: which environment-light path to run, to attribute its GPU cost. One of:
+    /// array (default), single (masks TEXTURE_BINDING_ARRAY), diffuse-only, specular-only,
+    /// ambient (same as --disable env), no-clearcoat.
+    #[arg(long, value_name = "MODE", conflicts_with = "headless")]
+    pub env_mode: Option<String>,
+
     /// Switch every optional effect off (same as `--disable all`).
     #[arg(long, conflicts_with = "headless")]
     pub safe_render: bool,

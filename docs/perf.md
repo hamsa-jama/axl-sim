@@ -173,3 +173,65 @@ The opaque pass is where the environment is sampled. Its env share dropped from 
 under llvmpipe. Frame averages did not move (the run-to-run spread under llvmpipe is several ms), so this
 sandbox cannot confirm the laptop target of 2 ms. Owner check: re-run the owner's table on the laptop.
 Per-pass lines (`perf: gpu  NN ms  render/...`) print again, sorted by cost, top-level passes only.
+
+## Where the environment-light cost comes from (Bevy 0.20.1 source reading) and `--env-mode`
+
+Laptop result that prompted this (UHD 620, Mesa ANV, Low preset): `--disable env` takes the opaque
+pass from 20.6 ms to 10.6 ms, and decision 0008 (smaller maps) did not change it. A 256-square cube
+cannot cost 10 ms at 1.9 Mpx by texture bandwidth alone, so the shader path is the suspect.
+
+What the shader does (`bevy_pbr-0.20.1/src/light_probe/environment_map.wesl`, selected by
+`mesh_view_bindings.wesl` and `render/mesh.rs`):
+
+- **Array path** (`MULTIPLE_LIGHT_PROBES_IN_ARRAY`). Chosen when the device has
+  `TEXTURE_BINDING_ARRAY` and `SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING` and the
+  array limits are at least 24 (`binding_arrays_are_usable`, `light_probe/mod.rs`). Per fragment it
+  runs a loop (`light_probe_iterator_next`) over the clustered light-probe list, reads the cube
+  array with a non-uniform index (`binding_array<texture_cube, 8>`), calls `textureNumLevels`, and
+  samples diffuse and specular maps. The loop runs once more until it finds no probe and falls back to
+  the view's probe.
+- **Single path** (no define). No loop and no cluster lookup: one plain `texture_cube` pair for the
+  view, a uniform for the mip count.
+- **Clearcoat** (`STANDARD_MATERIAL_CLEARCOAT`) repeats the entire `compute_radiances` call for the
+  coat layer: a second probe loop, a second specular and a second diffuse sample. AXL's ABS material
+  has a clearcoat, so every plastic fragment pays the lookup twice.
+- Both maps are `Rgba16Float`, the specular one with a full mip chain.
+
+Which path each adapter takes, as measured with the new start-up log line
+`environment light path: ...`:
+
+- **llvmpipe (this sandbox): ARRAY.** The lead that llvmpipe lacks binding arrays is wrong: it reports
+  both features and array limits of 1,000,000, so it takes the same path as the laptop should.
+  Its cost drop with env off (17 to 6 ms) is therefore a software-renderer figure, not evidence
+  about the array path.
+- **Laptop UHD 620 (Mesa ANV, Gen9): unknown until the owner runs it.** The log line states it. If
+  ANV advertises the features it takes ARRAY too. Non-uniform indexed descriptor arrays are known to
+  be slow on Gen9 hardware, which is the leading suspect.
+
+`--env-mode` (diagnostic only; the default is unchanged):
+
+| Mode | What it does |
+| --- | --- |
+| `array` | Default. The path the adapter allows. |
+| `single` | Masks `TEXTURE_BINDING_ARRAY` in `WgpuSettings.disabled_features`, so Bevy compiles the single-cube path. |
+| `diffuse-only` | Keeps the diffuse map, replaces the specular map by a 1x1 black cube (the shader still samples, but from one texel). |
+| `specular-only` | The reverse. |
+| `ambient` | No environment map, flat ambient light (same as `--disable env`). |
+| `no-clearcoat` | Normal environment path but every material's clearcoat is zeroed, to measure the doubled lookup. |
+
+Laptop commands (read the `perf:` line and the GPU pass lines; the log line
+`environment light path:` and `render: ... env-mode` tell which path ran):
+
+```sh
+for m in array single diffuse-only specular-only no-clearcoat ambient; do
+  echo "== $m"
+  cargo run -p axl-app --release -- --lookdev --quality low --env-mode $m --perf-seconds 10 2>&1 \
+    | grep -E "environment light path|env-mode|perf:|opaque|GPU"
+done
+```
+
+Read the result like this: if `single` is much cheaper than `array`, the cost is the binding-array
+and probe-iterator path (fix: force the single path when the adapter is slow, or at least on Low).
+If `no-clearcoat` is about half of the env cost, the clearcoat's second lookup matters (fix: drop the
+clearcoat on Low and Medium). If only `ambient` is cheap, the cost is the cube sampling itself
+(fix: smaller or `Rg11b10Ufloat` maps, a custom baked map).
