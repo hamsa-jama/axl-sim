@@ -1,0 +1,25 @@
+(
+    version: 1,
+    name: "Test chassis",
+    parts: [
+        (
+            uid: 1,
+            part: "plate_6x8",
+            pos: (0, 0, 0),
+            orient: 1,
+            color: "dark_grey",
+            device: None,
+        ),
+        (
+            uid: 2,
+            part: "hub",
+            pos: (0, 0, 32),
+            orient: 0,
+            color: "white",
+            device: Some((
+                name: "hub",
+                port: None,
+            )),
+        ),
+    ],
+)

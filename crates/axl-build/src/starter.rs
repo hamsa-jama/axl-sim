@@ -69,6 +69,11 @@ fn named(mut s: Step, name: &'static str) -> Step {
     s
 }
 
+fn on_port(mut s: Step, port: Port) -> Step {
+    s.port = Some(port);
+    s
+}
+
 /// The Rover recipe: two medium motors, two 56 mm wheels, a caster, an ultrasonic sensor and a
 /// colour sensor, on an 8x16 plate under a hub. The motors, caster and colour sensor hang under
 /// the plate; the wheels sit outside it on 3-unit axles.
@@ -76,18 +81,27 @@ pub fn rover_steps() -> Vec<Step> {
     vec![
         step("plate_8x16", "dark_grey", "", Aim::Down(0.0, 0.0)),
         named(step("hub", "white", "", Aim::Down(0.0, 0.0)), "hub"),
-        named(
-            step("sensor_ultrasonic", "black", "", Aim::Down(24.0, 0.0)),
-            "eye",
+        on_port(
+            named(
+                step("sensor_ultrasonic", "black", "", Aim::Down(24.0, 0.0)),
+                "eye",
+            ),
+            Port::C,
         ),
         // Motors: the output face points outward (+Y on the left, -Y on the right).
-        named(
-            step("motor_medium", "light_grey", "", Aim::Up(4.0, 37.25)),
-            "left",
+        on_port(
+            named(
+                step("motor_medium", "light_grey", "", Aim::Up(4.0, 37.25)),
+                "left",
+            ),
+            Port::A,
         ),
-        named(
-            step("motor_medium", "light_grey", "RR", Aim::Up(4.0, -37.25)),
-            "right",
+        on_port(
+            named(
+                step("motor_medium", "light_grey", "RR", Aim::Up(4.0, -37.25)),
+                "right",
+            ),
+            Port::B,
         ),
         step("axle_3", "dark_grey", "R", Aim::FromPosY(4.0, -12.0)),
         step("axle_3", "dark_grey", "RRR", Aim::FromNegY(4.0, -12.0)),
@@ -97,9 +111,12 @@ pub fn rover_steps() -> Vec<Step> {
         step("brick_2x2", "red", "", Aim::Up(-24.0, 0.0)),
         step("brick_2x2", "red", "", Aim::Up(-24.0, 0.0)),
         step("caster_ball", "dark_grey", "", Aim::Up(-24.0, 0.0)),
-        named(
-            step("sensor_color", "white", "", Aim::Up(24.0, 0.0)),
-            "color",
+        on_port(
+            named(
+                step("sensor_color", "white", "", Aim::Up(24.0, 0.0)),
+                "color",
+            ),
+            Port::D,
         ),
     ]
 }
