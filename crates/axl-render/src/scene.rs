@@ -12,10 +12,10 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use serde::{Deserialize, Serialize};
 
 use crate::camera_rig::{ActiveQuality, CameraHome};
-use crate::lighting::{assets_dir, ConfigError};
+use crate::lighting::{ConfigError, assets_dir};
 use crate::materials_data::{
-    abs, micro_surface_normal_map_mips, mip_count, part_color, part_variation,
-    MICRO_NORMAL_SIZE, MICRO_NORMAL_STRENGTH,
+    MICRO_NORMAL_SIZE, MICRO_NORMAL_STRENGTH, abs, micro_surface_normal_map_mips, mip_count,
+    part_color, part_variation,
 };
 use crate::placeholder::{bevel_box_mesh, cylinder_mesh, gear_blank_mesh, sphere_mesh};
 use crate::sync::SimBody;
@@ -165,7 +165,8 @@ impl SceneDef {
                 Err(e) => tracing::warn!("{e}; using the built-in look-dev scene"),
             }
         }
-        Self::from_ron(DEFAULT_LOOKDEV_RON).unwrap_or_else(|e| panic!("built-in look-dev scene: {e}"))
+        Self::from_ron(DEFAULT_LOOKDEV_RON)
+            .unwrap_or_else(|e| panic!("built-in look-dev scene: {e}"))
     }
 
     /// The camera home this scene asks for.
@@ -192,12 +193,15 @@ pub fn resolve_color(id: &str) -> Option<[u8; 3]> {
     part_color(id)
 }
 
+/// Cache key: uid bucket, kind, colour, roughness and brightness steps.
+type MaterialKey = (u32, MaterialKind, [u8; 3], i32, i32);
+
 /// The micro-surface texture and every plastic material that uses it.
 #[derive(Resource, Default)]
 pub struct PartMaterials {
     micro: Handle<Image>,
     plastics: Vec<Handle<StandardMaterial>>,
-    cache: BTreeMap<(u32, MaterialKind, [u8; 3], i32, i32), Handle<StandardMaterial>>,
+    cache: BTreeMap<MaterialKey, Handle<StandardMaterial>>,
     meshes: BTreeMap<String, Handle<Mesh>>,
 }
 
@@ -266,13 +270,13 @@ impl PartMaterials {
                 ..default()
             },
             MaterialKind::Rubber => StandardMaterial {
-                base_color: Color::srgb_u8(0x1A, 0x1A, 0x1A).into(),
+                base_color: Color::srgb_u8(0x1A, 0x1A, 0x1A),
                 perceptual_roughness: 0.85 + rough_d,
                 reflectance: 0.35,
                 ..default()
             },
             MaterialKind::Steel => StandardMaterial {
-                base_color: Color::srgb_u8(0xBF, 0xBF, 0xBF).into(),
+                base_color: Color::srgb_u8(0xBF, 0xBF, 0xBF),
                 metallic: 1.0,
                 perceptual_roughness: 0.15 + rough_d,
                 ..default()
@@ -338,15 +342,23 @@ impl ShapeBuilder<'_> {
     fn mesh_for(&mut self, shape: &Shape) -> (Handle<Mesh>, Transform) {
         let key = format!("{shape:?}");
         match shape {
-            Shape::Box { size_mm: (x, y, z), bevel_mm } => {
+            Shape::Box {
+                size_mm: (x, y, z),
+                bevel_mm,
+            } => {
                 let half = Vec3::new(*x, *y, *z) * MM * 0.5;
                 let b = *bevel_mm * MM;
                 (
-                    self.parts.mesh(self.meshes, key, || bevel_box_mesh(half, b)),
+                    self.parts
+                        .mesh(self.meshes, key, || bevel_box_mesh(half, b)),
                     Transform::default(),
                 )
             }
-            Shape::Cylinder { radius_mm, length_mm, axis } => {
+            Shape::Cylinder {
+                radius_mm,
+                length_mm,
+                axis,
+            } => {
                 let (r, l) = (radius_mm * MM, length_mm * MM);
                 let key = format!("cyl {r} {l}");
                 let rot = match axis {
@@ -367,7 +379,10 @@ impl ShapeBuilder<'_> {
                 )
             }
             Shape::Studs { .. } => unreachable!("studs are expanded by the caller"),
-            Shape::Gear { teeth, thickness_mm } => {
+            Shape::Gear {
+                teeth,
+                thickness_mm,
+            } => {
                 let (t, th) = (*teeth, thickness_mm * MM);
                 (
                     self.parts.mesh(self.meshes, key, || gear_blank_mesh(t, th)),
@@ -405,7 +420,11 @@ impl ShapeBuilder<'_> {
             let offset = Vec3::new(ox, oy, oz) * MM;
             if let Shape::Studs { nx, ny } = entry.shape {
                 // 4.8 x 1.7 mm studs; the mesh centre sits half a stud above the offset.
-                let stud = Shape::Cylinder { radius_mm: 2.4, length_mm: 1.7, axis: Axis::Z };
+                let stud = Shape::Cylinder {
+                    radius_mm: 2.4,
+                    length_mm: 1.7,
+                    axis: Axis::Z,
+                };
                 let (mesh, tf) = self.mesh_for(&stud);
                 for ix in 0..nx {
                     for iy in 0..ny {
@@ -437,8 +456,14 @@ impl ShapeBuilder<'_> {
         parent
     }
 
-    fn materials_for(&mut self, kind: MaterialKind, rgb: [u8; 3], uid: u32) -> Handle<StandardMaterial> {
-        self.parts.material(self.materials, kind, rgb, uid, self.micro_on)
+    fn materials_for(
+        &mut self,
+        kind: MaterialKind,
+        rgb: [u8; 3],
+        uid: u32,
+    ) -> Handle<StandardMaterial> {
+        self.parts
+            .material(self.materials, kind, rgb, uid, self.micro_on)
     }
 }
 
@@ -470,13 +495,21 @@ pub fn spawn_stress_boxes(
     n: usize,
     builder: &mut ShapeBuilder,
 ) {
-    let colors = ["red", "blue", "yellow", "green", "orange", "white", "light_grey", "dark_grey", "black"];
+    let colors = [
+        "red",
+        "blue",
+        "yellow",
+        "green",
+        "orange",
+        "white",
+        "light_grey",
+        "dark_grey",
+        "black",
+    ];
     let cols = (n as f32).sqrt().ceil() as usize;
-    let mesh = builder
-        .parts
-        .mesh(builder.meshes, "stress box".into(), || {
-            bevel_box_mesh(Vec3::splat(0.012), 0.0004)
-        });
+    let mesh = builder.parts.mesh(builder.meshes, "stress box".into(), || {
+        bevel_box_mesh(Vec3::splat(0.012), 0.0004)
+    });
     for i in 0..n {
         let rgb = part_color(colors[i % colors.len()]).unwrap_or([200, 200, 200]);
         let mat = builder.materials_for(MaterialKind::Abs, rgb, i as u32 + 1);
@@ -537,7 +570,11 @@ mod tests {
         assert!(wheel.shapes.iter().any(|e| matches!(
             e.shape, Shape::Cylinder { radius_mm, .. } if (radius_mm - 28.0).abs() < 1e-4)));
         let gear = s.items.iter().find(|i| i.name == "gear_24").unwrap();
-        assert!(gear.shapes.iter().any(|e| matches!(e.shape, Shape::Gear { teeth: 24, .. })));
+        assert!(
+            gear.shapes
+                .iter()
+                .any(|e| matches!(e.shape, Shape::Gear { teeth: 24, .. }))
+        );
     }
 
     #[test]
@@ -551,6 +588,9 @@ mod tests {
     #[test]
     fn newer_scene_version_is_refused() {
         let text = DEFAULT_LOOKDEV_RON.replacen("version: 1", "version: 9", 1);
-        assert!(matches!(SceneDef::from_ron(&text), Err(ConfigError::TooNew)));
+        assert!(matches!(
+            SceneDef::from_ron(&text),
+            Err(ConfigError::TooNew)
+        ));
     }
 }

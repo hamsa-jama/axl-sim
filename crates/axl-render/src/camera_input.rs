@@ -8,13 +8,13 @@
 use crate::camera_rig::UiCapture;
 
 use bevy::app::prelude::*;
-use bevy::camera::{prelude::*, RenderTarget};
+use bevy::camera::{RenderTarget, prelude::*};
 use bevy::ecs::prelude::*;
 use bevy::input::{
     mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
 };
-use bevy::math::{prelude::*, DVec2, DVec3};
+use bevy::math::{DVec2, DVec3, prelude::*};
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::window::{PrimaryWindow, Window};
@@ -74,6 +74,7 @@ impl Plugin for AxlCameraInputPlugin {
 /// Mouse mapping from the spec ("Camera controls"):
 /// orbit with right-drag or Alt + left-drag, pan with middle-drag or Shift + right-drag,
 /// zoom with the wheel. Nothing starts while the pointer is over an egui panel.
+#[allow(clippy::too_many_arguments)]
 pub fn axl_camera_inputs(
     pointers: Query<(&PointerId, &PointerLocation)>,
     pointer_map: Res<CameraPointerMap>,
@@ -104,8 +105,11 @@ pub fn axl_camera_inputs(
             .unwrap_or(0.0);
         let should_zoom_end = is_in_zoom_mode && zoom_amount_abs <= zoom_stop;
 
-        if mouse_input.any_just_released([MouseButton::Right, MouseButton::Middle, MouseButton::Left])
-            || should_zoom_end
+        if mouse_input.any_just_released([
+            MouseButton::Right,
+            MouseButton::Middle,
+            MouseButton::Left,
+        ]) || should_zoom_end
         {
             controller.write(PanOrbitCameraInputMessage::End { camera });
         }
@@ -195,6 +199,7 @@ impl PanOrbitCameraInputMessage {
     }
 
     /// Receive [`PanOrbitCameraInputMessage`]s, and use these to start and end moves on the [`PanOrbitCamera`].
+    #[allow(clippy::too_many_arguments)]
     pub fn receive_messages(
         mut events: MessageReader<Self>,
         mut controllers: Query<(&mut PanOrbitCamera, &GlobalTransform)>,

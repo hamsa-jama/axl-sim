@@ -279,7 +279,10 @@ mod tests {
         assert_eq!(px.len(), size * size * 4);
         let mut max_lean = 0.0f32;
         for p in px.chunks(4) {
-            let n: Vec<f32> = p[..3].iter().map(|&b| b as f32 / 255.0 * 2.0 - 1.0).collect();
+            let n: Vec<f32> = p[..3]
+                .iter()
+                .map(|&b| b as f32 / 255.0 * 2.0 - 1.0)
+                .collect();
             let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
             assert!((len - 1.0).abs() < 0.02, "len {len}");
             max_lean = max_lean.max((n[0] * n[0] + n[1] * n[1]).sqrt());
@@ -298,6 +301,9 @@ mod tests {
         let b = micro_surface_normal_map(size, 0.15, 1);
         assert_eq!(a, b);
         let flat = micro_surface_normal_map(size, 0.0, 1);
-        assert!(flat.chunks(4).all(|p| p[0] == 128 && p[1] == 128 && p[2] == 255));
+        assert!(
+            flat.chunks(4)
+                .all(|p| p[0] == 128 && p[1] == 128 && p[2] == 255)
+        );
     }
 }

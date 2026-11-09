@@ -63,7 +63,12 @@ pub fn bevel_box_mesh(half: Vec3, bevel: f32) -> Mesh {
                 axis[a] * s * half[a] + axis[b1] * sa * inner[b1] + axis[b2] * sb * inner[b2]
             };
             push(
-                &[corner(-1.0, -1.0), corner(1.0, -1.0), corner(1.0, 1.0), corner(-1.0, 1.0)],
+                &[
+                    corner(-1.0, -1.0),
+                    corner(1.0, -1.0),
+                    corner(1.0, 1.0),
+                    corner(-1.0, 1.0),
+                ],
                 axis[a] * s,
             );
         }
@@ -76,10 +81,14 @@ pub fn bevel_box_mesh(half: Vec3, bevel: f32) -> Mesh {
                 for sa in [-1.0f32, 1.0] {
                     for sb in [-1.0f32, 1.0] {
                         let p1 = |sc: f32| {
-                            axis[a] * sa * half[a] + axis[bb] * sb * inner[bb] + axis[c] * sc * inner[c]
+                            axis[a] * sa * half[a]
+                                + axis[bb] * sb * inner[bb]
+                                + axis[c] * sc * inner[c]
                         };
                         let p2 = |sc: f32| {
-                            axis[a] * sa * inner[a] + axis[bb] * sb * half[bb] + axis[c] * sc * inner[c]
+                            axis[a] * sa * inner[a]
+                                + axis[bb] * sb * half[bb]
+                                + axis[c] * sc * inner[c]
                         };
                         let n = axis[a] * sa + axis[bb] * sb;
                         push(&[p1(-1.0), p1(1.0), p2(1.0), p2(-1.0)], n);
@@ -100,10 +109,13 @@ pub fn bevel_box_mesh(half: Vec3, bevel: f32) -> Mesh {
         }
     }
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, pos)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, nor)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv);
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, pos)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, nor)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv);
     if mesh.generate_tangents().is_err() {
         tracing::warn!("could not generate tangents for a placeholder box");
     }
@@ -124,7 +136,9 @@ pub fn cylinder_mesh(radius: f32, length: f32) -> Mesh {
 
 /// A UV sphere with UVs in micro tiles.
 pub fn sphere_mesh(radius: f32) -> Mesh {
-    let mut mesh = Mesh::from(Sphere::new(radius).mesh().uv(64, 32))
+    let mut mesh = Sphere::new(radius)
+        .mesh()
+        .uv(64, 32)
         .rotated_by(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2));
     scale_uvs(&mut mesh, radius * 2.0 / MICRO_TILE_M);
     if mesh.generate_tangents().is_err() {
@@ -144,9 +158,14 @@ pub fn gear_blank_mesh(teeth: u32, thickness: f32) -> Mesh {
     for i in 0..teeth {
         let a = i as f32 / teeth as f32 * std::f32::consts::TAU;
         let r = root_r + tooth_h * 0.5 - 0.0002;
-        let tooth = bevel_box_mesh(Vec3::new(tooth_h * 0.5, tooth_w * 0.5, thickness * 0.5), 0.00015)
-            .transformed_by(Transform::from_translation(Vec3::new(r * a.cos(), r * a.sin(), 0.0))
-                .with_rotation(Quat::from_rotation_z(a)));
+        let tooth = bevel_box_mesh(
+            Vec3::new(tooth_h * 0.5, tooth_w * 0.5, thickness * 0.5),
+            0.00015,
+        )
+        .transformed_by(
+            Transform::from_translation(Vec3::new(r * a.cos(), r * a.sin(), 0.0))
+                .with_rotation(Quat::from_rotation_z(a)),
+        );
         mesh.merge(&tooth).ok();
     }
     mesh
@@ -201,13 +220,20 @@ mod tests {
         assert_eq!(n, 44 * 3);
         // Zero bevel is a plain box: 12 triangles.
         let plain = bevel_box_mesh(Vec3::splat(0.01), 0.0);
-        assert_eq!(plain.attribute(Mesh::ATTRIBUTE_POSITION).unwrap().len(), 12 * 3);
+        assert_eq!(
+            plain.attribute(Mesh::ATTRIBUTE_POSITION).unwrap().len(),
+            12 * 3
+        );
     }
 
     #[test]
     fn normals_face_outwards_and_are_unit_length() {
         let mesh = bevel_box_mesh(Vec3::new(0.02, 0.01, 0.005), 0.001);
-        let pos = mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap().as_float3().unwrap();
+        let pos = mesh
+            .attribute(Mesh::ATTRIBUTE_POSITION)
+            .unwrap()
+            .as_float3()
+            .unwrap();
         let nor = match mesh.attribute(Mesh::ATTRIBUTE_NORMAL).unwrap() {
             bevy::mesh::VertexAttributeValues::Float32x3(v) => v.clone(),
             _ => panic!(),

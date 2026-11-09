@@ -246,8 +246,8 @@ pub fn studio_radiance(dir: Vec3) -> Vec3 {
     // Azimuth in the AXL frame (Bevy +Z is AXL -Y), so softboxes line up with the key light.
     let az = (-d.z).atan2(d.x).to_degrees();
     let el = d.y.clamp(-1.0, 1.0).asin().to_degrees();
-    for (baz, bel, haz, hel, strength, tint) in boxes {
-        let mut daz = (az - baz + 540.0).rem_euclid(360.0) - 180.0;
+    for (b_az, bel, haz, hel, strength, tint) in boxes {
+        let mut daz = (az - b_az + 540.0).rem_euclid(360.0) - 180.0;
         // Azimuth extents shrink towards the pole so the box keeps a rectangular look.
         daz *= bel.to_radians().cos().max(0.2);
         let edge = |x: f32, half: f32| 1.0 - smooth((x.abs() - half) / 3.0);
@@ -395,7 +395,10 @@ mod tests {
                 }
             }
         }
-        assert!(peak > 5.0, "softboxes should be much brighter than the room: {peak}");
+        assert!(
+            peak > 5.0,
+            "softboxes should be much brighter than the room: {peak}"
+        );
     }
 
     #[test]

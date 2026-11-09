@@ -2,7 +2,7 @@
 //! grid lines in a shader (`shaders/grid_floor.wesl`), plus the builder's stud dots and
 //! measure tool.
 
-use bevy::asset::{embedded_asset, AssetPath};
+use bevy::asset::{AssetPath, embedded_asset};
 use bevy::light::NotShadowCaster;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::pbr::{ExtendedMaterial, MaterialExtension};
@@ -12,10 +12,10 @@ use bevy::shader::ShaderRef;
 
 use crate::frames::AxlRoot;
 use crate::grid_math::{
-    spacing_in_pixels, GridUnits, FADE_FAR_M, FADE_NEAR_M, MIN_LINE_SPACING_PX, OPACITY_BUILDER,
-    OPACITY_SIMULATE,
+    FADE_FAR_M, FADE_NEAR_M, GridUnits, MIN_LINE_SPACING_PX, OPACITY_BUILDER, OPACITY_SIMULATE,
+    spacing_in_pixels,
 };
-use crate::lighting::{srgb, LightingConfig};
+use crate::lighting::{LightingConfig, srgb};
 
 /// Edge length of the floor quad in metres.
 pub const FLOOR_SIZE_M: f32 = 200.0;
@@ -97,7 +97,12 @@ impl GridParams {
             ink: Vec4::new(ink[0], ink[1], ink[2], opacity.clamp(0.0, 1.0)),
             fade: Vec4::new(FADE_NEAR_M, FADE_FAR_M, MIN_LINE_SPACING_PX, 2.0),
             // Dots reach 12 studs around the cursor.
-            cursor: Vec4::new(c.x, c.y, minor * 12.0, if cursor.is_some() { 1.0 } else { 0.0 }),
+            cursor: Vec4::new(
+                c.x,
+                c.y,
+                minor * 12.0,
+                if cursor.is_some() { 1.0 } else { 0.0 },
+            ),
             measure: Vec4::new(p0.x, p0.y, p1.x, p1.y),
             measure_count: Vec4::new(measure.points.len() as f32, 0.0, 0.0, 0.0),
         }
@@ -114,7 +119,9 @@ pub struct GridExt {
 
 impl MaterialExtension for GridExt {
     fn fragment_shader() -> ShaderRef {
-        ShaderRef::Path(AssetPath::from("embedded://axl_render/shaders/grid_floor.wesl"))
+        ShaderRef::Path(AssetPath::from(
+            "embedded://axl_render/shaders/grid_floor.wesl",
+        ))
     }
 }
 
@@ -203,7 +210,10 @@ impl Plugin for GridPlugin {
             .init_resource::<ViewMode>()
             .init_resource::<Measure>()
             .init_resource::<CursorOnFloor>()
-            .add_systems(Update, (track_cursor, measure_clicks, update_grid_uniforms).chain());
+            .add_systems(
+                Update,
+                (track_cursor, measure_clicks, update_grid_uniforms).chain(),
+            );
     }
 }
 
@@ -332,7 +342,12 @@ fn update_grid_uniforms(
 
 /// Pixels between minor lines for a camera at `distance_m` looking straight down with the
 /// given vertical field of view and viewport height. Used by tests and the UI hint.
-pub fn minor_spacing_px(units: GridUnits, distance_m: f32, fov_y_rad: f32, viewport_h_px: f32) -> f32 {
+pub fn minor_spacing_px(
+    units: GridUnits,
+    distance_m: f32,
+    fov_y_rad: f32,
+    viewport_h_px: f32,
+) -> f32 {
     let metres_per_pixel = 2.0 * distance_m * (fov_y_rad * 0.5).tan() / viewport_h_px;
     spacing_in_pixels(units.spacings()[0], metres_per_pixel)
 }

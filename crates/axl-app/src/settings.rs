@@ -112,9 +112,15 @@ impl Settings {
 
 /// Write `bytes` to `path` through a temporary file in the same folder, keeping a `.bak` copy.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir)?;
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let tmp = dir.join(format!(".{name}.tmp"));
     {
         let mut f = std::fs::File::create(&tmp)?;
@@ -199,6 +205,9 @@ mod tests {
     #[test]
     fn missing_file_gives_defaults() {
         let dir = scratch("missing");
-        assert_eq!(Settings::load(&dir.join("nope.ron")).unwrap(), Settings::default());
+        assert_eq!(
+            Settings::load(&dir.join("nope.ron")).unwrap(),
+            Settings::default()
+        );
     }
 }

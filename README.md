@@ -29,7 +29,7 @@ cargo run -p axl-app --release -- --headless --version
 
 - Workspace with every crate as a skeleton, pinned toolchain, CI on Linux, Windows and macOS.
 - `cargo xtask fetch-mujoco`.
-- `axl` opens an empty window with a status bar; `axl --headless --version` prints the version.
+- `axl` opens the studio view with the grid floor, camera controls and a control bar (the first launch runs a short quality benchmark). `axl --lookdev --screenshot out.png` renders the look-dev scene to a PNG; `--stress-boxes N`, `--quality low|medium|high|ultra` and `--perf-seconds S` support the perf check in `docs/perf.md`; `axl --headless --version` prints the version.
 
 Everything else is on the milestone list in `SPEC.md`.
 

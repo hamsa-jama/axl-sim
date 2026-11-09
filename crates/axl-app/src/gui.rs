@@ -3,14 +3,14 @@
 use axl_render::bevy::prelude::*;
 use axl_render::bevy::window::PresentMode;
 use axl_render::camera_rig::{
-    gizmo_axes, ActiveQuality, CameraHome, CameraMode, CameraSettings, UiCapture, ViewCamera,
+    ActiveQuality, CameraHome, CameraMode, CameraSettings, UiCapture, ViewCamera, gizmo_axes,
 };
 use axl_render::grid::{CursorOnFloor, GridSettings, Measure, ViewMode};
 use axl_render::grid_math::GridUnits;
 use axl_render::quality::QualityPreset;
 use axl_render::{BenchmarkFinished, RenderOptions, StageContent, StagePlugin};
 use bevy_egui::input::EguiWantsInput;
-use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiPrimaryContextPass};
+use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 
 use crate::cli::Args;
 use crate::settings::Settings;
@@ -49,9 +49,7 @@ pub fn run(args: &Args) -> AppExit {
     {
         eprintln!("axl: unknown quality {q:?}; use low, medium, high or ultra");
     }
-    let quality = forced
-        .or(current.quality)
-        .unwrap_or(QualityPreset::High);
+    let quality = forced.or(current.quality).unwrap_or(QualityPreset::High);
     // The first-launch benchmark runs only for a normal start with nothing saved.
     let benchmark = !scripted && forced.is_none() && current.quality.is_none();
 
@@ -84,22 +82,28 @@ pub fn run(args: &Args) -> AppExit {
         .filter(|(w, h)| *w >= 320 && *h >= 240);
     let big_window = args.lookdev || args.stress_boxes.is_some();
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: "AXL".into(),
-            resolution: size
-                .unwrap_or(if big_window { (1920, 1080) } else { (1280, 800) })
-                .into(),
-            // Frame-rate checks must not be capped by the monitor.
-            present_mode: if args.perf_seconds.is_some() {
-                PresentMode::AutoNoVsync
-            } else {
-                PresentMode::AutoVsync
-            },
+    app.add_plugins(
+        DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "AXL".into(),
+                resolution: size
+                    .unwrap_or(if big_window {
+                        (1920, 1080)
+                    } else {
+                        (1280, 800)
+                    })
+                    .into(),
+                // Frame-rate checks must not be capped by the monitor.
+                present_mode: if args.perf_seconds.is_some() {
+                    PresentMode::AutoNoVsync
+                } else {
+                    PresentMode::AutoVsync
+                },
+                ..default()
+            }),
             ..default()
         }),
-        ..default()
-    }))
+    )
     .add_plugins(EguiPlugin::default())
     .insert_resource(FramesLeft(args.exit_after_frames))
     .insert_resource(GridSettings {
@@ -112,17 +116,33 @@ pub fn run(args: &Args) -> AppExit {
         opacity_simulate: current.grid_opacity_simulate,
         ..default()
     })
-    .insert_resource(CameraSettings { invert_orbit: current.invert_orbit })
+    .insert_resource(CameraSettings {
+        invert_orbit: current.invert_orbit,
+    })
     .insert_resource(SettingsStore { current, path })
     .add_plugins(StagePlugin(options))
-    .add_systems(Update, (exit_when_done, forward_egui_capture, persist_settings, remember_benchmark))
-    .add_systems(EguiPrimaryContextPass, (control_bar, status_bar, gizmo_overlay).chain());
+    .add_systems(
+        Update,
+        (
+            exit_when_done,
+            forward_egui_capture,
+            persist_settings,
+            remember_benchmark,
+        ),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        (control_bar, status_bar, gizmo_overlay).chain(),
+    );
     app.run()
 }
 
 /// Parse `fx,fy,fz,yaw,pitch,distance` (mm and degrees) into a camera home.
 fn parse_pose(s: &str) -> Option<CameraHome> {
-    let v: Vec<f32> = s.split(',').map(|p| p.trim().parse().ok()).collect::<Option<_>>()?;
+    let v: Vec<f32> = s
+        .split(',')
+        .map(|p| p.trim().parse().ok())
+        .collect::<Option<_>>()?;
     let [fx, fy, fz, yaw, pitch, dist] = v[..] else {
         return None;
     };
@@ -199,7 +219,11 @@ fn control_bar(
                 ViewMode::Simulate => grid.opacity_simulate,
             } * 100.0;
             if ui
-                .add(egui::Slider::new(&mut pct, 0.0..=100.0).suffix("%").integer())
+                .add(
+                    egui::Slider::new(&mut pct, 0.0..=100.0)
+                        .suffix("%")
+                        .integer(),
+                )
                 .changed()
             {
                 match *mode {
@@ -277,7 +301,9 @@ fn status_bar(
                 ));
             }
             ui.separator();
-            ui.label("Right-drag orbit | Middle-drag pan | Wheel zoom | V camera | Home reset | F focus");
+            ui.label(
+                "Right-drag orbit | Middle-drag pan | Wheel zoom | V camera | Home reset | F focus",
+            );
         });
     });
     Ok(())
@@ -342,7 +368,10 @@ fn exit_when_done(mut left: ResMut<FramesLeft>, mut exit: MessageWriter<AppExit>
 }
 
 /// Store the benchmark's choice so it runs only once.
-fn remember_benchmark(mut done: MessageReader<BenchmarkFinished>, mut store: ResMut<SettingsStore>) {
+fn remember_benchmark(
+    mut done: MessageReader<BenchmarkFinished>,
+    mut store: ResMut<SettingsStore>,
+) {
     for d in done.read() {
         store.current.quality = Some(d.preset);
         save(&store);

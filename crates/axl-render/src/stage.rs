@@ -5,15 +5,15 @@ use std::path::PathBuf;
 
 use bevy::app::AppExit;
 use bevy::prelude::*;
-use bevy::render::view::screenshot::{save_to_disk, Screenshot};
+use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
-use crate::camera_rig::{spawn_view_camera, ActiveQuality, CameraHome, FocusTarget};
+use crate::camera_rig::{ActiveQuality, CameraHome, FocusTarget, spawn_view_camera};
 use crate::frames::spawn_root;
-use crate::grid::{spawn_floor, GridMaterial, GridSettings};
+use crate::grid::{GridMaterial, GridSettings, spawn_floor};
 use crate::lighting::LightingConfig;
 use crate::quality::{BenchmarkConfig, BenchmarkRun, QualityPreset};
 use crate::scene::{
-    spawn_scene, spawn_stress_boxes, PartMaterials, SceneDef, ShapeBuilder, StressBoxes,
+    PartMaterials, SceneDef, ShapeBuilder, StressBoxes, spawn_scene, spawn_stress_boxes,
 };
 use crate::sync::{BodyPose, RenderSnapshot, SnapshotBuffer};
 
@@ -123,10 +123,7 @@ impl Plugin for StagePlugin {
             .add_plugins((crate::grid::GridPlugin, crate::camera_rig::CameraRigPlugin))
             .add_systems(
                 Update,
-                (
-                    crate::sync::sync_bodies,
-                    crate::scene::apply_micro_surface,
-                ),
+                (crate::sync::sync_bodies, crate::scene::apply_micro_surface),
             );
 
         match &opts.content {
@@ -139,7 +136,11 @@ impl Plugin for StagePlugin {
             }
         }
         if let Some(path) = opts.screenshot.clone() {
-            app.insert_resource(LookdevCapture { path, frame: 0, requested_at: None });
+            app.insert_resource(LookdevCapture {
+                path,
+                frame: 0,
+                requested_at: None,
+            });
             app.add_systems(Update, lookdev_capture);
         }
         if opts.benchmark {
@@ -151,7 +152,12 @@ impl Plugin for StagePlugin {
             app.add_systems(Update, run_benchmark);
         }
         if let Some(seconds) = opts.perf_seconds {
-            app.insert_resource(PerfLog { seconds, elapsed: 0.0, frames: 0, times_ms: Vec::new() });
+            app.insert_resource(PerfLog {
+                seconds,
+                elapsed: 0.0,
+                frames: 0,
+                times_ms: Vec::new(),
+            });
             app.add_systems(Update, perf_log);
         }
         app.add_systems(Startup, setup_stage);
@@ -173,7 +179,14 @@ fn setup_stage(
     start_pose: Res<StartPose>,
 ) {
     let root = spawn_root(&mut commands);
-    spawn_floor(&mut commands, root, &mut meshes, &mut grid_mats, &lighting, &grid);
+    spawn_floor(
+        &mut commands,
+        root,
+        &mut meshes,
+        &mut grid_mats,
+        &lighting,
+        &grid,
+    );
 
     let mut parts = PartMaterials::new(&mut images);
     let mut home = CameraHome::default();
@@ -260,7 +273,10 @@ fn lookdev_capture(
         if cap.path.exists() {
             exit.write(AppExit::Success);
         } else if cap.frame >= at + 600 {
-            eprintln!("axl: the screenshot was not written to {}", cap.path.display());
+            eprintln!(
+                "axl: the screenshot was not written to {}",
+                cap.path.display()
+            );
             exit.write(AppExit::error());
         }
     }
@@ -280,7 +296,10 @@ fn run_benchmark(
         *done = true;
         quality.0 = preset;
         finished.write(BenchmarkFinished { preset, avg_ms });
-        tracing::info!("benchmark: {avg_ms:.1} ms per frame, chose {}", preset.label());
+        tracing::info!(
+            "benchmark: {avg_ms:.1} ms per frame, chose {}",
+            preset.label()
+        );
     }
 }
 

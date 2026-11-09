@@ -1,7 +1,11 @@
 //! The view camera: orbit / follow / top-down modes, view keys, exposure, and the
 //! application of quality presets to the camera and key light.
 
-use bevy::anti_alias::{fxaa::Fxaa, smaa::{Smaa, SmaaPreset}, taa::TemporalAntiAliasing};
+use bevy::anti_alias::{
+    fxaa::Fxaa,
+    smaa::{Smaa, SmaaPreset},
+    taa::TemporalAntiAliasing,
+};
 use bevy::camera::{Exposure, Hdr, OrthographicProjection, ScalingMode};
 use bevy::camera_controller::pan_orbit_camera::prelude::*;
 use bevy::core_pipeline::prepass::{DepthPrepass, MotionVectorPrepass, NormalPrepass};
@@ -19,7 +23,7 @@ use bevy::render::camera::{MipBias, TemporalJitter};
 use bevy::render::view::{ColorGrading, ColorGradingGlobal};
 
 use crate::frames::axl_to_bevy;
-use crate::lighting::{srgb, LightingConfig};
+use crate::lighting::{LightingConfig, srgb};
 use crate::quality::{AaMode, AoLevel, QualityPreset};
 
 /// Marks the 3D view camera.
@@ -118,7 +122,12 @@ pub fn orbit_position(focus: Vec3, yaw_deg: f32, pitch_deg: f32, distance: f32) 
 
 /// Place a camera transform on an orbit and look at the focus, with Bevy's +Y as up.
 pub fn orbit_transform(home: &CameraHome) -> Transform {
-    let pos = axl_to_bevy(orbit_position(home.focus, home.yaw_deg, home.pitch_deg, home.distance));
+    let pos = axl_to_bevy(orbit_position(
+        home.focus,
+        home.yaw_deg,
+        home.pitch_deg,
+        home.distance,
+    ));
     Transform::from_translation(pos).looking_at(axl_to_bevy(home.focus), Vec3::Y)
 }
 
@@ -134,7 +143,10 @@ fn studio_bloom(intensity: f32) -> Bloom {
     Bloom {
         intensity,
         composite_mode: BloomCompositeMode::Additive,
-        prefilter: BloomPrefilter { threshold: 1.0, threshold_softness: 0.6 },
+        prefilter: BloomPrefilter {
+            threshold: 1.0,
+            threshold_softness: 0.6,
+        },
         ..Bloom::NATURAL
     }
 }
@@ -148,7 +160,9 @@ pub fn spawn_view_camera(
     quality: QualityPreset,
 ) -> Entity {
     let env = images.add(crate::lighting::studio_cubemap(256));
-    let exposure = Exposure { ev100: lighting.camera.ev100() };
+    let exposure = Exposure {
+        ev100: lighting.camera.ev100(),
+    };
 
     let mut pan = PanOrbitCamera::default().with_initial_anchor_depth(home.distance as f64);
     pan.perspective.near_clip_limits = lighting.camera.near_m..lighting.camera.near_m;
@@ -227,7 +241,13 @@ impl Plugin for CameraRigPlugin {
         .init_resource::<DirectionalLightShadowMap>()
         .add_systems(
             Update,
-            (view_keys, apply_camera_mode, follow_target, apply_orbit_inversion, apply_quality),
+            (
+                view_keys,
+                apply_camera_mode,
+                follow_target,
+                apply_orbit_inversion,
+                apply_quality,
+            ),
         );
     }
 }
@@ -329,7 +349,12 @@ fn follow_target(
     mut cams: Query<&mut Transform, With<ViewCamera>>,
 ) {
     let current = (*mode == CameraMode::Follow)
-        .then(|| focus.0.and_then(|e| targets.get(e).ok()).map(|t| t.translation()))
+        .then(|| {
+            focus
+                .0
+                .and_then(|e| targets.get(e).ok())
+                .map(|t| t.translation())
+        })
         .flatten();
     if let (Some(now), Some(prev), Ok(mut tf)) = (current, *last, cams.single_mut()) {
         tf.translation += now - prev;
@@ -388,7 +413,9 @@ pub fn apply_quality(
             e.insert(Fxaa::default());
         }
         AaMode::Smaa => {
-            e.insert(Smaa { preset: SmaaPreset::High });
+            e.insert(Smaa {
+                preset: SmaaPreset::High,
+            });
         }
         AaMode::Taa => {
             e.insert(TemporalAntiAliasing::default());
@@ -399,7 +426,11 @@ pub fn apply_quality(
     }
     if q.contact_shadows {
         // Distances are in metres; the defaults (30 cm rays) are far too long for small parts.
-        e.insert(ContactShadows { linear_steps: 16, thickness: 0.004, length: 0.03 });
+        e.insert(ContactShadows {
+            linear_steps: 16,
+            thickness: 0.004,
+            length: 0.03,
+        });
     }
     if q.ao != AoLevel::Off {
         let level = match q.ao {
