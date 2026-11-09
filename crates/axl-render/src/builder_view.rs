@@ -569,7 +569,7 @@ fn probe(
     }
     let c = cam_tf.translation();
     let a = crate::frames::bevy_to_axl(c);
-    out.push_str(&format!("cam {:.0} {:.0} {:.0}\n", a.x * 1000.0, a.y * 1000.0, a.z * 1000.0 + floor_z));
+    out.push_str(&format!("cam {:.0} {:.0} {:.0}\n", a.x * 1000.0, a.y * 1000.0, a.z * 1000.0 + floor_z as f32));
     let mut p = path.clone();
     p.push(".out");
     let _ = std::fs::write(p, out);
