@@ -61,8 +61,7 @@ impl Battery {
     /// total is the idle draw plus the absolute motor currents of the previous step.
     pub fn begin_step(&mut self, motor_currents_abs: f64) -> f64 {
         self.current = self.p.idle_a + motor_currents_abs;
-        self.terminal =
-            (self.open_circuit() - self.p.internal_resistance * self.current).max(0.0);
+        self.terminal = (self.open_circuit() - self.p.internal_resistance * self.current).max(0.0);
         self.terminal
     }
 

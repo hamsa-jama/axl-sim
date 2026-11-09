@@ -69,7 +69,11 @@ mod tests {
         let mut b = Noise::new(7, b'A', 0, true);
         let n = 100_000;
         let xs: Vec<f64> = (0..n).map(|_| a.gauss(2.0)).collect();
-        assert!(xs.iter().zip((0..n).map(|_| b.gauss(2.0))).all(|(x, y)| *x == y));
+        assert!(
+            xs.iter()
+                .zip((0..n).map(|_| b.gauss(2.0)))
+                .all(|(x, y)| *x == y)
+        );
         let mean = xs.iter().sum::<f64>() / n as f64;
         let var = xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n as f64;
         assert!(mean.abs() < 0.03, "{mean}");

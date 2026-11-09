@@ -166,7 +166,6 @@ impl Ultrasonic {
     pub fn distance(&self, now_ms: u64) -> f64 {
         self.queue.read(now_ms).map_or(-1.0, |s| s.v[0])
     }
-
 }
 
 // ----- time of flight --------------------------------------------------------------------
@@ -242,7 +241,6 @@ impl TimeOfFlight {
     pub fn distance(&self, now_ms: u64) -> f64 {
         self.queue.read(now_ms).map_or(-1.0, |s| s.v[0])
     }
-
 }
 
 // ----- colour ----------------------------------------------------------------------------
@@ -272,13 +270,7 @@ pub struct ColorSensor {
 
 impl ColorSensor {
     /// A sensor looking along the z axis of `site`.
-    pub fn new(
-        name: &str,
-        site: SiteId,
-        p: ColorParams,
-        names: &ColorNames,
-        noise: Noise,
-    ) -> Self {
+    pub fn new(name: &str, site: SiteId, p: ColorParams, names: &ColorNames, noise: Noise) -> Self {
         Self {
             name: name.to_owned(),
             site,
@@ -333,7 +325,8 @@ impl ColorSensor {
         let offsets = [[0.0, 0.0], [r, 0.0], [-r, 0.0], [0.0, r], [0.0, -r]];
         let (mut lit, mut plain, mut hits) = ([0.0; 3], [0.0; 3], 0usize);
         for o in offsets {
-            let from: [f64; 3] = std::array::from_fn(|i| pos[i] + axes[0][i] * o[0] + axes[1][i] * o[1]);
+            let from: [f64; 3] =
+                std::array::from_fn(|i| pos[i] + axes[0][i] * o[0] + axes[1][i] * o[1]);
             let Some(hit) = physics.ray(from, axes[2], GroupMask::WORLD_AND_OBJECTS) else {
                 continue;
             };
@@ -341,7 +334,8 @@ impl ColorSensor {
                 continue;
             }
             let col: [f64; 3] = match mat {
-                Some(m) if m.geom == hit.geom => match m.texture.sample(hit.point[0], hit.point[1]) {
+                Some(m) if m.geom == hit.geom => match m.texture.sample(hit.point[0], hit.point[1])
+                {
                     Some(c) => [c[0] as f64, c[1] as f64, c[2] as f64],
                     None => rgba3(physics, hit.geom),
                 },
@@ -358,7 +352,9 @@ impl ColorSensor {
             // Nothing in range: dark, with the sensor's noise floor.
             let fs = self.p.full_scale;
             let rgb = std::array::from_fn(|_| {
-                (self.noise.gauss(self.p.sigma_frac * fs)).round().clamp(0.0, fs) as i32
+                (self.noise.gauss(self.p.sigma_frac * fs))
+                    .round()
+                    .clamp(0.0, fs) as i32
             });
             return ColorReading { rgb, ..none };
         }
@@ -423,7 +419,6 @@ impl ColorSensor {
             },
         }
     }
-
 }
 
 fn rgba3(physics: &Physics, g: GeomId) -> [f64; 3] {
@@ -472,7 +467,7 @@ impl TouchSensor {
 
     /// Every 1 ms step: debounce the raw force. The state changes only after the opposite state
     /// has held for the debounce time.
-    pub(crate) fn step(&mut self, physics: &Physics) {
+    pub fn step(&mut self, physics: &Physics) {
         let raw = self.force(physics) > self.p.threshold_n;
         if raw == self.pressed {
             self.counter = 0;
@@ -515,7 +510,6 @@ impl TouchSensor {
     pub fn pressed(&self, now_ms: u64) -> bool {
         self.queue.read(now_ms).is_some_and(|s| s.v[1] > 0.5)
     }
-
 }
 
 // ----- hub IMU ---------------------------------------------------------------------------
@@ -631,12 +625,15 @@ impl Imu {
 
     /// Gyro as a controller sees it at `now_ms`, rad/s.
     pub fn gyro(&self, now_ms: u64) -> [f64; 3] {
-        self.gyro_q.read(now_ms).map_or([0.0; 3], |s| [s.v[0], s.v[1], s.v[2]])
+        self.gyro_q
+            .read(now_ms)
+            .map_or([0.0; 3], |s| [s.v[0], s.v[1], s.v[2]])
     }
 
     /// Accelerometer as a controller sees it at `now_ms`, m/s2.
     pub fn accel(&self, now_ms: u64) -> [f64; 3] {
-        self.accel_q.read(now_ms).map_or([0.0; 3], |s| [s.v[0], s.v[1], s.v[2]])
+        self.accel_q
+            .read(now_ms)
+            .map_or([0.0; 3], |s| [s.v[0], s.v[1], s.v[2]])
     }
-
 }

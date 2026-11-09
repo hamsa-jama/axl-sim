@@ -212,7 +212,10 @@ impl Hardware {
                 }
                 DeviceModel::Ultrasonic => {
                     if let Some(site) = &d.site {
-                        push(DeviceKind::Distance, Slot::Ultrasonic(self.ultrasonics.len()));
+                        push(
+                            DeviceKind::Distance,
+                            Slot::Ultrasonic(self.ultrasonics.len()),
+                        );
                         self.ultrasonics.push(Ultrasonic::new(
                             &d.name,
                             SiteId(site.id),
