@@ -6,8 +6,36 @@ AXL (pronounced "axle") is a desktop robotics simulator for teenagers. Learners 
 
 - [`SPEC.md`](SPEC.md) is the full design and development specification.
 - [`CLAUDE.md`](CLAUDE.md) holds working rules for coding agents.
+- [`docs/build.md`](docs/build.md) has the full build notes.
 
-Build instructions will appear here when milestone M0 is complete.
+## Build and run
+
+You need [rustup](https://rustup.rs), `curl` and `tar`. On Linux, also install `libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev`.
+
+```sh
+git clone https://github.com/hamsa-jama/axl-sim
+cd axl-sim
+cargo xtask fetch-mujoco          # MuJoCo 3.12.0 into third_party/, checksum verified
+cargo run -p axl-app --release    # opens the AXL window (needs a display and a GPU)
+```
+
+Without a window, for graders and CI:
+
+```sh
+cargo run -p axl-app --release -- --headless --version
+```
+
+## What works today
+
+- Workspace with every crate as a skeleton, pinned toolchain, CI on Linux, Windows and macOS.
+- `cargo xtask fetch-mujoco`.
+- `axl` opens an empty window with a status bar; `axl --headless --version` prints the version.
+
+Everything else is on the milestone list in `SPEC.md`.
+
+## Opening an unsigned macOS build
+
+Version 1 macOS packages are not signed. After copying `AXL.app` to Applications, right-click it, choose Open, then Open again in the dialog. (Packages arrive with milestone M10.)
 
 ## Licence
 

@@ -1,0 +1,11 @@
+[package]
+name = "axl-host"
+description = "The wasmtime host for learner controllers: ABI functions, memory limits and timeouts."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
