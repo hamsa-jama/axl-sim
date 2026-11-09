@@ -104,11 +104,18 @@ const REGISTRY: &[(&str, TestFn)] = &[
     ("V04", crate::v_dynamics::v04_slope_friction),
     ("V05", crate::v_dynamics::v05_sliding_stop),
     ("V06", crate::v_dynamics::v06_rolling),
+    ("V07", crate::v_hw::v07_no_load_speed),
+    ("V08", crate::v_hw::v08_blocked_shaft),
+    ("V09", crate::v_hw::v09_step_response),
     ("V10", crate::v_robot::v10_gear_ratio),
+    ("V11", crate::v_hw::v11_battery_sag),
     ("V12", crate::v_robot::v12_straight),
     ("V13", crate::v_robot::v13_turn_radius),
     ("V14", crate::v_robot::v14_rest_penetration),
     ("V15", crate::v_repro::v15_determinism),
+    ("V16", crate::v_hw::v16_distance_sensors),
+    ("V17", crate::v_hw::v17_colour_edge),
+    ("V18", crate::v_hw::v18_gyro_and_encoder),
 ];
 
 /// Ids of the tests that exist.

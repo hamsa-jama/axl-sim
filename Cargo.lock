@@ -464,6 +464,17 @@ version = "0.1.0"
 [[package]]
 name = "axl-hw"
 version = "0.1.0"
+dependencies = [
+ "approx",
+ "axl-build",
+ "axl-compile",
+ "axl-mujoco",
+ "axl-parts",
+ "rand_chacha",
+ "ron",
+ "serde",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "axl-missions"
@@ -507,6 +518,7 @@ version = "0.1.0"
 dependencies = [
  "axl-build",
  "axl-compile",
+ "axl-hw",
  "axl-mujoco",
  "axl-parts",
  "crossbeam-channel",
@@ -520,6 +532,7 @@ version = "0.1.0"
 dependencies = [
  "axl-build",
  "axl-compile",
+ "axl-hw",
  "axl-mujoco",
  "axl-parts",
  "rand_chacha",

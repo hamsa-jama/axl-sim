@@ -52,3 +52,7 @@ the parts it holds). `axl-sim` owns MuJoCo on its own thread and publishes `SimS
 triple buffer; the app pumps them into `axl-render`'s `SnapshotBuffer`, and `sim_view` hangs each
 part's meshes under a `SimBody` entity using the body map. Try it: `axl --sandbox rover
 --volts left=4,right=4`. Constants are in `assets/physics/hardware.ron` (placeholder: calibrate).
+
+## After M6
+
+`axl-hw` (no Bevy) holds the hardware models: `Hardware::new(&DeviceMap, &HwParams, HwOptions, &Physics)` builds a battery, a `Motor` per motor or servo (command mode, PI loops, `Encoder`), and the sensors (`Ultrasonic`, `TimeOfFlight`, `ColorSensor`, `TouchSensor`, `Imu`) from the compiler's device map. The sim loop calls `pre_step` (battery voltage, then motor commands to `ctrl`), `Physics::step`, `post_step` (encoders, currents, charge, then any sensor sample that is due, after a `forward()`). Each sensor samples on a whole-millisecond clock into a fixed 8-entry `DelayQueue`; a read at time t returns the newest sample at or before t minus the delay. Noise comes from per-device `ChaCha8Rng` streams seeded by (run seed, port letter, stream). Devices have handles (their index in `Hardware::devices()`) with a `DeviceKind` and a `Slot`, which the M7 host uses for wrong-device errors. `axl-hw::rig` builds small MJCF rigs for tests and the accuracy suite. Choices the spec leaves open: decision 0012.

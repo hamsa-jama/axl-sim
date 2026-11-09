@@ -279,3 +279,21 @@ runs). The render-thread figure includes the software GPU, so it cannot show a C
 bindless. Owner follow-up: on the laptop, compare `cpu main_ms` and `render_ms` of the 200-box
 scene for `--env-mode array` and `single` (GPU-bound there, so a CPU difference would show in
 `render_ms`).
+
+### Owner confirmation of the `single` default (main at 4245eb7)
+
+Reference laptop (UHD 620), 200 boxes, every run logs `light path: SINGLE`:
+
+| preset | fps | p99 ms | CPU main / render ms | opaque ms | GPU total ms |
+| --- | --- | --- | --- | --- | --- |
+| Low | 51.2 | 21.3 | 1.97 / 18.95 | 12.3 | 16.5 |
+| Medium | 25.8 | 41.1 | 2.51 / 38.08 | 13.6 | 33.4 |
+| High | 13.9 | 75.6 | 1.90 / 71.43 | 36.1 | 65.7 |
+
+CPU main-thread time is unchanged at about 2 ms, so masking bindless materials costs nothing on the
+CPU side. High's opaque pass (36 ms) and its SSAO (12.6), TAA (7.0) and bloom (3.6) are High's own
+features (contact shadows, four soft cascades), not the environment path. New on Low: GPU
+`uniform_allocation` rose from 0.02 to 1.12 ms and `bin_unpacking` from 0.01 to 0.57 ms, probably
+per-material bind groups now that bindless is off. Follow-up (low priority): check whether that
+cost scales with the number of distinct materials and, if so, reduce the per-part roughness and
+brightness variation levels on Low.

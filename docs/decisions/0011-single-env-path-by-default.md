@@ -24,3 +24,10 @@ one environment map, so the array path buys nothing.
 
 If a future feature needs reflection probes, irradiance volumes, clustered decals or lightmaps, this
 mask must be revisited.
+
+## Owner confirmation
+
+On the reference laptop with the new default, CPU main-thread time stayed at about 2 ms, so losing
+bindless costs nothing on the CPU side. The GPU passes `uniform_allocation` and `bin_unpacking` grew
+by about 1.1 ms and 0.6 ms on Low (probably per-material bind groups); the numbers are in
+`docs/perf.md`. A follow-up will check whether that scales with the number of distinct materials.

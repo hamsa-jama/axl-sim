@@ -1,6 +1,6 @@
 // Physical constants of the compiled robot (SPEC.md, "Hardware models" and "Assembly-to-physics
 // compiler"). Every number here is `placeholder: calibrate` (see docs/calibration.md); each
-// comment names where the default comes from. M6 adds the battery and the sensors to this file.
+// comment names where the default comes from. The battery, control, encoder, sensor and colour tables below are read by `axl-hw`.
 (
     version: 1,
     solver: (
@@ -60,5 +60,76 @@
         motor_damping: 1e-5,
         gear_mesh_friction_loss: 0.0005,
         caster_ball_damping: 1e-6,
+    ),
+
+    // Battery (SPEC "Battery"): two-cell lithium-ion pack, open-circuit voltage linear in charge.
+    // placeholder: calibrate.
+    battery: (
+        v_full: 8.4,
+        v_nom: 7.4,
+        v_empty: 6.4,
+        internal_resistance: 0.15,
+        capacity_ah: 2.0,
+        idle_a: 0.08,
+        // Missions start at 90% charge unless they say otherwise.
+        start_soc: 0.9,
+    ),
+    // Built-in motor loops. speed_kp and speed_ki are from SPEC "Motor command modes";
+    // position_kp (1/s) is NOT in the spec: a control-design choice, decision 0012.
+    // done_* are the spec's "done" criteria for position mode.
+    control: (
+        speed_kp: 0.6,
+        speed_ki: 6.0,
+        position_kp: 8.0,
+        done_error_deg: 1.0,
+        done_speed: 0.05,
+        // Encoder speed is the change in counts over this many milliseconds (SPEC "Encoders").
+        speed_window_ms: 10,
+    ),
+    // Encoders (SPEC "Motor parameters"): counts per revolution, and the servo's counts over its span.
+    encoders: (
+        cpr: 360.0,
+        servo_counts: 1024.0,
+        servo_span_deg: 300.0,
+    ),
+    // Sensors (SPEC "Sensors" table). placeholder: calibrate.
+    sensors: (
+        ultrasonic: (
+            min_m: 0.03, max_m: 2.5, rate_hz: 20.0, delay_ms: 30,
+            ring_deg: (7.5, 15.0), ring_rays: 6, max_incidence_deg: 40.0,
+            sigma_abs_m: 0.003, sigma_rel: 0.01, resolution_m: 0.001,
+        ),
+        tof: (
+            min_m: 0.04, max_m: 2.0, rate_hz: 50.0, delay_ms: 20,
+            ring_deg: 2.5, ring_rays: 4, max_incidence_deg: 75.0,
+            sigma_abs_m: 0.002, sigma_rel: 0.005,
+        ),
+        color: (
+            min_m: 0.004, max_m: 0.030, rate_hz: 100.0, delay_ms: 10,
+            spot_radius_m: 0.003, peak_m: 0.008, width_m: 0.015,
+            full_scale: 1023.0, sigma_frac: 0.015,
+        ),
+        touch: (
+            max_n: 10.0, rate_hz: 100.0, delay_ms: 5,
+            threshold_n: 1.0, debounce_ms: 5, sigma_n: 0.05,
+        ),
+        gyro: (
+            range: 34.9, rate_hz: 100.0, delay_ms: 10,
+            sigma: 0.003, bias_sigma: 0.005, drift_per_sample: 1e-5, bits: 16,
+        ),
+        accel: (
+            range: 78.5, rate_hz: 100.0, delay_ms: 10,
+            sigma: 0.02, bias_sigma: 0.05, bits: 16,
+        ),
+    ),
+    // Reference colours the colour sensor names (nearest in RGB, 0 to 1). Not in the spec's
+    // numbers; plain primaries. placeholder: calibrate against the arena mat.
+    colors: (
+        black: (0.0, 0.0, 0.0),
+        white: (1.0, 1.0, 1.0),
+        red: (1.0, 0.0, 0.0),
+        green: (0.0, 1.0, 0.0),
+        blue: (0.0, 0.0, 1.0),
+        yellow: (1.0, 1.0, 0.0),
     ),
 )
