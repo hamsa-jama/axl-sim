@@ -534,6 +534,9 @@ fn perf_log(
             }
         }
     }
+    // Nested passes (names like `a/b`, children of a pass already counted) stay out of totals and
+    // the text summary, so the same work is not counted twice. `perf.json` keeps them, flagged.
+    let gpu_total: f64 = gpu.iter().filter(|(p, _)| !p.contains('/')).map(|(_, v)| v).sum();
     gpu.sort_by(|a, b| b.1.total_cmp(&a.1));
     cpu.sort_by(|a, b| b.1.total_cmp(&a.1));
     println!(
@@ -557,18 +560,25 @@ fn perf_log(
             }
         );
     } else {
-        for (p, v) in gpu.iter().take(12) {
+        println!(
+            "perf: gpu_total_ms={gpu_total:.2} frame_ms={avg:.2} (top-level passes only; nested a/b passes are children and excluded)"
+        );
+        for (p, v) in gpu.iter().filter(|(p, _)| !p.contains('/')).take(12) {
             println!("perf: gpu {v:6.2} ms  {p}");
         }
     }
     let list = |v: &[(String, f64)]| {
         v.iter()
-            .map(|(p, ms)| format!("{{\"pass\":{},\"ms\":{ms:.4}}}", json_str(p)))
+            .map(|(p, ms)| format!(
+                    "{{\"pass\":{},\"ms\":{ms:.4},\"nested\":{}}}",
+                    json_str(p),
+                    p.contains('/')
+                ))
             .collect::<Vec<_>>()
             .join(",")
     };
     let json = format!(
-        "{{\"adapter\":{},\"backend\":{},\"device_type\":{},\"driver\":{},\"preset\":{},\"resolution\":[{},{}],\"present_mode\":{},\"disabled\":[{}],\"frames\":{n},\"frame_ms\":{{\"mean\":{avg:.3},\"p50\":{p50:.3},\"p95\":{p95:.3},\"p99\":{p99:.3}}},\"fps\":{fps:.2},\"cpu_ms\":{{\"main\":{:.3},\"render\":{:.3}}},\"gpu_timestamps\":{},\"gpu_passes\":[{}],\"cpu_passes\":[{}],\"drawn\":{},\"unique_meshes\":{},\"unique_materials\":{}}}\n",
+        "{{\"adapter\":{},\"backend\":{},\"device_type\":{},\"driver\":{},\"preset\":{},\"resolution\":[{},{}],\"present_mode\":{},\"disabled\":[{}],\"frames\":{n},\"frame_ms\":{{\"mean\":{avg:.3},\"p50\":{p50:.3},\"p95\":{p95:.3},\"p99\":{p99:.3}}},\"fps\":{fps:.2},\"cpu_ms\":{{\"main\":{:.3},\"render\":{:.3}}},\"gpu_total_ms\":{gpu_total:.3},\"gpu_timestamps\":{},\"gpu_passes\":[{}],\"cpu_passes\":[{}],\"drawn\":{},\"unique_meshes\":{},\"unique_materials\":{}}}\n",
         json_str(&adapter),
         json_str(&backend),
         json_str(&device_type),
