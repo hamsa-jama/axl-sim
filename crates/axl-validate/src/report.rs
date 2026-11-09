@@ -104,6 +104,10 @@ const REGISTRY: &[(&str, TestFn)] = &[
     ("V04", crate::v_dynamics::v04_slope_friction),
     ("V05", crate::v_dynamics::v05_sliding_stop),
     ("V06", crate::v_dynamics::v06_rolling),
+    ("V10", crate::v_robot::v10_gear_ratio),
+    ("V12", crate::v_robot::v12_straight),
+    ("V13", crate::v_robot::v13_turn_radius),
+    ("V14", crate::v_robot::v14_rest_penetration),
     ("V15", crate::v_repro::v15_determinism),
 ];
 

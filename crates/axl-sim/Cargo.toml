@@ -9,3 +9,12 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+axl-compile = { path = "../axl-compile" }
+axl-mujoco = { path = "../axl-mujoco" }
+crossbeam-channel = "0.5"
+triple_buffer = "9"
+thiserror = "2"
+
+[dev-dependencies]
+axl-build = { path = "../axl-build" }
+axl-parts = { path = "../axl-parts" }
