@@ -77,9 +77,9 @@ pub struct Args {
     #[arg(long, value_name = "LIST", conflicts_with = "headless")]
     pub disable: Option<String>,
 
-    /// Diagnostic: which environment-light path to run, to attribute its GPU cost. One of:
-    /// array (default), single (masks TEXTURE_BINDING_ARRAY), diffuse-only, specular-only,
-    /// ambient (same as --disable env), no-clearcoat.
+    /// Which environment-light path to run. One of: single (default; masks
+    /// TEXTURE_BINDING_ARRAY, see decision 0011), array (the adapter's own choice), and the
+    /// diagnostics diffuse-only, specular-only, ambient (same as --disable env), no-clearcoat.
     #[arg(long, value_name = "MODE", conflicts_with = "headless")]
     pub env_mode: Option<String>,
 
