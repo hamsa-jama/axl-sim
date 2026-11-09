@@ -5,9 +5,9 @@
 
 use std::collections::BTreeMap;
 
+use axl_parts::Catalog;
 use axl_parts::trimesh::MeshData;
 use axl_parts::types::{PartDef, Surface};
-use axl_parts::Catalog;
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
@@ -71,7 +71,14 @@ impl PartLibrary {
                 .iter()
                 .map(|s| (s.body, s.surface, meshes.add(to_bevy_mesh(&s.mesh))))
                 .collect();
-            self.cache.insert(id.to_string(), CachedPart { slots, bounds, triangles });
+            self.cache.insert(
+                id.to_string(),
+                CachedPart {
+                    slots,
+                    bounds,
+                    triangles,
+                },
+            );
         }
         self.cache.get(id)
     }
@@ -79,12 +86,15 @@ impl PartLibrary {
 
 /// Convert generated vertex data to a Bevy mesh (positions in the AXL frame, metres).
 pub fn to_bevy_mesh(d: &MeshData) -> Mesh {
-    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, d.positions.clone())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, d.normals.clone())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, d.uvs.clone())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_TANGENT, d.tangents.clone())
-        .with_inserted_indices(Indices::U32(d.indices.clone()))
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, d.positions.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, d.normals.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, d.uvs.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_TANGENT, d.tangents.clone())
+    .with_inserted_indices(Indices::U32(d.indices.clone()))
 }
 
 /// Rotation applied when a part is shown on its own: wheels stand up on their tyres.
@@ -130,7 +140,11 @@ impl ShapeBuilder<'_> {
                 .parts
                 .material(self.materials, kind, rgb, uid, self.micro_on);
             let child = commands
-                .spawn((Mesh3d(mesh.clone()), MeshMaterial3d(mat), Transform::default()))
+                .spawn((
+                    Mesh3d(mesh.clone()),
+                    MeshMaterial3d(mat),
+                    Transform::default(),
+                ))
                 .id();
             commands.entity(entity).add_child(child);
         }
@@ -160,6 +174,9 @@ mod tests {
         let c = Catalog::builtin();
         let q = display_rotation(c.get("wheel_56").unwrap());
         assert!((q * Vec3::Z - Vec3::NEG_Y).length() < 1e-5);
-        assert_eq!(display_rotation(c.get("brick_2x4").unwrap()), Quat::IDENTITY);
+        assert_eq!(
+            display_rotation(c.get("brick_2x4").unwrap()),
+            Quat::IDENTITY
+        );
     }
 }

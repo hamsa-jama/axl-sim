@@ -11,8 +11,8 @@ use crate::camera_rig::{ActiveQuality, CameraHome, FocusTarget, spawn_view_camer
 use crate::frames::spawn_root;
 use crate::grid::{GridMaterial, GridSettings, spawn_floor};
 use crate::lighting::LightingConfig;
-use crate::quality::{BenchmarkConfig, BenchmarkRun, QualityPreset};
 use crate::parts::PartLibrary;
+use crate::quality::{BenchmarkConfig, BenchmarkRun, QualityPreset};
 use crate::scene::{
     PartMaterials, SceneDef, ShapeBuilder, StressBoxes, spawn_scene, spawn_stress_boxes,
 };

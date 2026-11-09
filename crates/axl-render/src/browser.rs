@@ -66,7 +66,11 @@ impl PartLibrary {
         let def = self.catalog().get(id)?;
         Some(PartStats {
             triangles,
-            size_mm: [(hi[0] - lo[0]) * 1e3, (hi[1] - lo[1]) * 1e3, (hi[2] - lo[2]) * 1e3],
+            size_mm: [
+                (hi[0] - lo[0]) * 1e3,
+                (hi[1] - lo[1]) * 1e3,
+                (hi[2] - lo[2]) * 1e3,
+            ],
             volume_mm3: def.solid_volume_m3().map(|v| v * 1e9),
             mass_g: def.bodies.iter().map(|b| b.mass_kg).sum::<f64>() * 1e3,
             connectors: def.bodies.iter().map(|b| b.connectors.len()).sum(),
@@ -98,7 +102,9 @@ pub fn layout_rows(
     let mut rows: Vec<Vec<usize>> = Vec::new();
     let mut x = 0.0;
     for (i, &(w, _)) in sizes.iter().enumerate() {
-        let new_row = rows.is_empty() || break_before.get(i).copied().unwrap_or(false) || (x + w > max_width && x > 0.0);
+        let new_row = rows.is_empty()
+            || break_before.get(i).copied().unwrap_or(false)
+            || (x + w > max_width && x > 0.0);
         if new_row {
             rows.push(Vec::new());
             x = 0.0;
@@ -108,7 +114,9 @@ pub fn layout_rows(
     }
     let row_w: Vec<f32> = rows
         .iter()
-        .map(|r| r.iter().map(|&i| sizes[i].0).sum::<f32>() + gap * (r.len().saturating_sub(1)) as f32)
+        .map(|r| {
+            r.iter().map(|&i| sizes[i].0).sum::<f32>() + gap * (r.len().saturating_sub(1)) as f32
+        })
         .collect();
     let row_d: Vec<f32> = rows
         .iter()
@@ -132,7 +140,10 @@ pub fn layout_rows(
 /// Camera that frames a layout of `w` x `d` metres, `h` tall, from above at 55 degrees.
 pub fn frame_layout(w: f32, d: f32, h: f32) -> CameraHome {
     let pitch: f32 = 55.0;
-    let (vt, ht) = (17.5f32.to_radians().tan(), (17.5f32.to_radians().tan() * 1.6));
+    let (vt, ht) = (
+        17.5f32.to_radians().tan(),
+        (17.5f32.to_radians().tan() * 1.6),
+    );
     let need_w = w * 1.08 / (2.0 * ht);
     let need_h = (d * pitch.to_radians().sin() + h * pitch.to_radians().cos()) * 1.12 / (2.0 * vt);
     CameraHome {
@@ -223,16 +234,28 @@ fn rebuild(
         };
         let rot = display_rotation(&def);
         let (min, max) = rotated_bounds(b, rot);
-        entries.push(Entry { id: id.clone(), rot, min, max, cat: format!("{:?}", def.category) });
+        entries.push(Entry {
+            id: id.clone(),
+            rot,
+            min,
+            max,
+            cat: format!("{:?}", def.category),
+        });
     }
-    let sizes: Vec<(f32, f32)> = entries.iter().map(|e| (e.max.x - e.min.x, e.max.y - e.min.y)).collect();
+    let sizes: Vec<(f32, f32)> = entries
+        .iter()
+        .map(|e| (e.max.x - e.min.x, e.max.y - e.min.y))
+        .collect();
     let breaks: Vec<bool> = entries
         .iter()
         .enumerate()
         .map(|(i, e)| i > 0 && entries[i - 1].cat != e.cat)
         .collect();
     let (centres, total) = layout_rows(&sizes, &breaks, 0.62, 0.008);
-    let height = entries.iter().map(|e| e.max.z - e.min.z).fold(0.0, f32::max);
+    let height = entries
+        .iter()
+        .map(|e| e.max.z - e.min.z)
+        .fold(0.0, f32::max);
     let mut builder = ShapeBuilder {
         meshes: &mut meshes,
         materials: &mut std_mats,
@@ -245,9 +268,14 @@ fn rebuild(
     let color = state.color.clone().unwrap_or_default();
     for (i, e) in entries.iter().enumerate() {
         let c = if single { Vec2::ZERO } else { centres[i] };
-        let t = Vec3::new(c.x - (e.min.x + e.max.x) / 2.0, c.y - (e.min.y + e.max.y) / 2.0, -e.min.z);
+        let t = Vec3::new(
+            c.x - (e.min.x + e.max.x) / 2.0,
+            c.y - (e.min.y + e.max.y) / 2.0,
+            -e.min.z,
+        );
         let tf = Transform::from_translation(t).with_rotation(e.rot);
-        if let Some(ent) = builder.spawn_part(&mut commands, root, &e.id, &color, i as u32 + 1, tf) {
+        if let Some(ent) = builder.spawn_part(&mut commands, root, &e.id, &color, i as u32 + 1, tf)
+        {
             commands.entity(ent).insert(BrowserEntity);
         }
         if single {
@@ -282,7 +310,12 @@ fn axis_vec(a: Axis) -> Vec3 {
     Vec3::new(u[0] as f32, u[1] as f32, u[2] as f32)
 }
 
-fn overlays(state: Res<BrowserState>, view: Res<BrowserView>, lib: Res<PartLibrary>, mut gizmos: Gizmos) {
+fn overlays(
+    state: Res<BrowserState>,
+    view: Res<BrowserView>,
+    lib: Res<PartLibrary>,
+    mut gizmos: Gizmos,
+) {
     let Some((id, tf)) = &view.part else {
         return;
     };
@@ -313,7 +346,13 @@ fn overlays(state: Res<BrowserState>, view: Res<BrowserView>, lib: Res<PartLibra
                             Vec3::new(center[0] as f32, center[1] as f32, center[2] as f32),
                             Vec3::new(half[0] as f32, half[1] as f32, half[2] as f32),
                         );
-                        let corner = |i: usize| c + h * Vec3::new(if i & 1 == 0 { -1.0 } else { 1.0 }, if i & 2 == 0 { -1.0 } else { 1.0 }, if i & 4 == 0 { -1.0 } else { 1.0 });
+                        let corner = |i: usize| {
+                            c + h * Vec3::new(
+                                if i & 1 == 0 { -1.0 } else { 1.0 },
+                                if i & 2 == 0 { -1.0 } else { 1.0 },
+                                if i & 4 == 0 { -1.0 } else { 1.0 },
+                            )
+                        };
                         for i in 0..8usize {
                             for bit in [1usize, 2, 4] {
                                 if i & bit == 0 {
@@ -322,15 +361,29 @@ fn overlays(state: Res<BrowserState>, view: Res<BrowserView>, lib: Res<PartLibra
                             }
                         }
                     }
-                    CollisionPrim::Cylinder { center, axis, radius, half_len } => {
+                    CollisionPrim::Cylinder {
+                        center,
+                        axis,
+                        radius,
+                        half_len,
+                    } => {
                         let c = Vec3::new(center[0] as f32, center[1] as f32, center[2] as f32);
                         let a = axis_vec(*axis).abs();
-                        let (u, v) = if a.x > 0.5 { (Vec3::Y, Vec3::Z) } else if a.y > 0.5 { (Vec3::X, Vec3::Z) } else { (Vec3::X, Vec3::Y) };
+                        let (u, v) = if a.x > 0.5 {
+                            (Vec3::Y, Vec3::Z)
+                        } else if a.y > 0.5 {
+                            (Vec3::X, Vec3::Z)
+                        } else {
+                            (Vec3::X, Vec3::Y)
+                        };
                         let (r, hl) = (*radius as f32, *half_len as f32);
                         let n = 32;
                         for end in [-1.0f32, 1.0] {
                             for k in 0..n {
-                                let (a0, a1) = (std::f32::consts::TAU * k as f32 / n as f32, std::f32::consts::TAU * (k + 1) as f32 / n as f32);
+                                let (a0, a1) = (
+                                    std::f32::consts::TAU * k as f32 / n as f32,
+                                    std::f32::consts::TAU * (k + 1) as f32 / n as f32,
+                                );
                                 let p = |t: f32| c + a * hl * end + (u * t.cos() + v * t.sin()) * r;
                                 gizmos.line(w(p(a0)), w(p(a1)), col);
                             }
@@ -346,7 +399,10 @@ fn overlays(state: Res<BrowserState>, view: Res<BrowserView>, lib: Res<PartLibra
                         let r = *radius as f32;
                         for (u, v) in [(Vec3::X, Vec3::Y), (Vec3::X, Vec3::Z), (Vec3::Y, Vec3::Z)] {
                             for k in 0..32 {
-                                let (a0, a1) = (std::f32::consts::TAU * k as f32 / 32.0, std::f32::consts::TAU * (k + 1) as f32 / 32.0);
+                                let (a0, a1) = (
+                                    std::f32::consts::TAU * k as f32 / 32.0,
+                                    std::f32::consts::TAU * (k + 1) as f32 / 32.0,
+                                );
                                 let p = |t: f32| c + (u * t.cos() + v * t.sin()) * r;
                                 gizmos.line(w(p(a0)), w(p(a1)), col);
                             }

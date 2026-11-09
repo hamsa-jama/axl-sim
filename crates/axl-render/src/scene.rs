@@ -325,7 +325,14 @@ impl ShapeBuilder<'_> {
         for (i, p) in item.parts.iter().enumerate() {
             let tf = part_transform(p.pos_mm, p.rot_deg);
             if self
-                .spawn_part(commands, parent, &p.part, &p.color, first_uid + i as u32, tf)
+                .spawn_part(
+                    commands,
+                    parent,
+                    &p.part,
+                    &p.color,
+                    first_uid + i as u32,
+                    tf,
+                )
                 .is_none()
             {
                 tracing::warn!("unknown part {:?} in item {}", p.part, item.name);
