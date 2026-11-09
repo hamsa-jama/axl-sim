@@ -52,6 +52,8 @@ pub struct RenderOptions {
     pub camera_pose: Option<CameraHome>,
     /// Effects to switch off (`--disable`, `--safe-render`).
     pub disable: crate::diagnostics::DisableSet,
+    /// Which environment-light path to run (`--env-mode`, a diagnostic).
+    pub env_mode: crate::diagnostics::EnvMode,
     /// Why `quality` is what it is, for the start-up log.
     pub quality_reason: String,
 }
@@ -68,6 +70,7 @@ impl Default for RenderOptions {
             camera_mode: crate::camera_rig::CameraMode::Orbit,
             camera_pose: None,
             disable: Default::default(),
+            env_mode: Default::default(),
             quality_reason: "default".into(),
         }
     }
@@ -130,6 +133,7 @@ impl Plugin for StagePlugin {
             .insert_resource(StartPose(opts.camera_pose))
             .insert_resource(ActiveQuality(opts.quality))
             .insert_resource(opts.disable)
+            .insert_resource(opts.env_mode)
             .insert_resource(crate::diagnostics::QualityReason(
                 opts.quality_reason.clone(),
             ))

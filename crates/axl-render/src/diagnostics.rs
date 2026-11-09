@@ -55,6 +55,78 @@ pub const DISABLE_NAMES: [&str; 10] = [
     "picking",
 ];
 
+/// Which environment-light path to run, for attributing its GPU cost (`--env-mode`).
+///
+/// Bevy 0.20.1's PBR shader has two variants of the environment-map code. With
+/// `MULTIPLE_LIGHT_PROBES_IN_ARRAY` (chosen when the device has `TEXTURE_BINDING_ARRAY` and
+/// non-uniform indexing) it loops over a clustered list of light probes and samples
+/// `binding_array<texture_cube>`; otherwise it samples one plain cube texture for the view's
+/// probe. The clearcoat layer runs the whole lookup a second time.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EnvMode {
+    /// Today's default: whichever path the adapter allows (the array path on most desktop GPUs).
+    #[default]
+    Array,
+    /// Force the non-array path by masking `TEXTURE_BINDING_ARRAY` before the device is created.
+    Single,
+    /// Keep the diffuse map and replace the specular map with a 1x1 black cube.
+    DiffuseOnly,
+    /// Keep the specular map and replace the diffuse map with a 1x1 black cube.
+    SpecularOnly,
+    /// No environment map: a flat ambient light (the same as `--disable env`).
+    Ambient,
+    /// Normal environment path, but every material's clearcoat is switched off (the clearcoat
+    /// layer repeats the probe lookup).
+    NoClearcoat,
+}
+
+/// The names `--env-mode` accepts.
+pub const ENV_MODE_NAMES: [&str; 6] = [
+    "array",
+    "single",
+    "diffuse-only",
+    "specular-only",
+    "ambient",
+    "no-clearcoat",
+];
+
+impl EnvMode {
+    /// Parse a mode name.
+    pub fn parse(name: &str) -> Result<Self, String> {
+        Ok(match name.trim() {
+            "array" => Self::Array,
+            "single" => Self::Single,
+            "diffuse-only" => Self::DiffuseOnly,
+            "specular-only" => Self::SpecularOnly,
+            "ambient" => Self::Ambient,
+            "no-clearcoat" => Self::NoClearcoat,
+            other => {
+                return Err(format!(
+                    "unknown env mode {other:?}; use one of: {}",
+                    ENV_MODE_NAMES.join(", ")
+                ));
+            }
+        })
+    }
+
+    /// The name as typed on the command line.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Array => "array",
+            Self::Single => "single",
+            Self::DiffuseOnly => "diffuse-only",
+            Self::SpecularOnly => "specular-only",
+            Self::Ambient => "ambient",
+            Self::NoClearcoat => "no-clearcoat",
+        }
+    }
+
+    /// Features to mask out of the wgpu device for this mode.
+    pub fn disabled_features(self) -> Option<WgpuFeatures> {
+        (self == Self::Single).then_some(WgpuFeatures::TEXTURE_BINDING_ARRAY)
+    }
+}
+
 impl DisableSet {
     /// Everything off: what `--safe-render` selects.
     pub fn all() -> Self {
@@ -225,10 +297,12 @@ type FilteredCamera = (
 fn freeze_environment(
     mut commands: Commands,
     ready: Res<ReadyFrames>,
-    cams: Query<Entity, FilteredCamera>,
+    mode: Res<EnvMode>,
+    mut images: ResMut<Assets<Image>>,
+    mut cams: Query<(Entity, &mut bevy::light::EnvironmentMapLight), FilteredCamera>,
     mut steady: Local<u32>,
 ) {
-    let Ok(cam) = cams.single() else {
+    let Ok((cam, mut light)) = cams.single_mut() else {
         return;
     };
     if ready.0 < 8 {
@@ -243,6 +317,34 @@ fn freeze_environment(
         info!(
             "environment: filtered once and frozen (the generator would otherwise run every frame)"
         );
+        // Diagnostic modes: swap one of the two filtered maps for a 1x1 black cube.
+        let mut black = || bevy::light::EnvironmentMapLight::solid_color(&mut images, Color::BLACK);
+        match *mode {
+            EnvMode::DiffuseOnly => {
+                light.specular_map = black().specular_map;
+                info!("environment: --env-mode diffuse-only (specular map replaced by black)");
+            }
+            EnvMode::SpecularOnly => {
+                light.diffuse_map = black().diffuse_map;
+                info!("environment: --env-mode specular-only (diffuse map replaced by black)");
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `--env-mode no-clearcoat`: zero the clearcoat of every material, whenever the set changes.
+fn strip_clearcoat(
+    mode: Res<EnvMode>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut seen: Local<usize>,
+) {
+    if *mode != EnvMode::NoClearcoat || materials.len() == *seen {
+        return;
+    }
+    *seen = materials.len();
+    for (_, m) in materials.iter_mut() {
+        m.clearcoat = 0.0;
     }
 }
 
@@ -272,6 +374,7 @@ fn main_clock_end(clock: Res<FrameClock>, shared: Res<PerfShared>) {
 /// Log the GPU capabilities AXL depends on (runs once in the render world).
 fn log_gpu_capabilities(
     adapter: Res<RenderAdapter>,
+    device: Res<bevy::render::renderer::RenderDevice>,
     info: Res<RenderAdapterInfo>,
     instance: Res<RenderInstance>,
     shared: Res<PerfShared>,
@@ -307,6 +410,7 @@ fn log_gpu_capabilities(
         info.name, info.backend, info.device_type, info.driver, info.driver_info
     );
     let limits = adapter.limits();
+    log_env_path(&adapter, &device, &info);
     info!(
         "gpu limits: max texture 2d {} | max storage textures per stage {} | max bind groups {}",
         limits.max_texture_dimension_2d,
@@ -326,10 +430,41 @@ fn log_gpu_capabilities(
     }
 }
 
+/// Log which environment-light shader variant Bevy 0.20.1 will use, using the same test as
+/// `bevy_pbr::light_probe::binding_arrays_are_usable` (that function is not public).
+fn log_env_path(
+    adapter: &RenderAdapter,
+    device: &bevy::render::renderer::RenderDevice,
+    info: &RenderAdapterInfo,
+) {
+    let want = WgpuFeatures::TEXTURE_BINDING_ARRAY
+        | WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
+    let adapter_has = adapter.features().contains(want);
+    let device_has = device.features().contains(want);
+    let limits = device.limits();
+    // 16 (standard material minimum) + 8 (MAX_VIEW_LIGHT_PROBES).
+    let limits_ok = limits.max_binding_array_elements_per_shader_stage >= 24
+        && limits.max_binding_array_sampler_elements_per_shader_stage >= 24;
+    let adreno_ok = bevy::render::get_adreno_model(info).is_none_or(|m| m > 610);
+    let array = device_has && limits_ok && adreno_ok;
+    info!(
+        "environment light path: {} (adapter has binding arrays: {adapter_has} | device has them: {device_has} | array limits {} textures, {} samplers (need 24): {limits_ok} | adreno ok: {adreno_ok})",
+        if array {
+            "ARRAY: binding_array<texture_cube, 8> with the clustered light-probe iterator (MULTIPLE_LIGHT_PROBES_IN_ARRAY)"
+        } else {
+            "SINGLE: one plain texture_cube pair, no probe iterator"
+        },
+        limits.max_binding_array_elements_per_shader_stage,
+        limits.max_binding_array_sampler_elements_per_shader_stage,
+    );
+}
+
 /// Log the effective camera and effect configuration once the camera exists.
+#[allow(clippy::too_many_arguments)] // a Bevy system: each argument is a separate resource or query
 pub fn log_render_setup(
     quality: Res<crate::camera_rig::ActiveQuality>,
     reason: Res<QualityReason>,
+    env_mode: Res<EnvMode>,
     disable: Res<DisableSet>,
     cams: Query<(Has<bevy::camera::Hdr>, Option<&Msaa>), With<crate::camera_rig::ViewCamera>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
@@ -364,11 +499,12 @@ pub fn log_render_setup(
     }
     *done = true;
     info!(
-        "render: quality {} ({}) | hdr {} | msaa {:?} | disabled: {}",
+        "render: quality {} ({}) | hdr {} | msaa {:?} | env-mode {} | disabled: {}",
         quality.0.label(),
         reason.0,
         hdr,
         msaa,
+        env_mode.label(),
         if disable.is_empty() {
             "none".to_string()
         } else {
@@ -385,10 +521,19 @@ impl Plugin for DiagnosticsPlugin {
         let shared = PerfShared::default();
         app.init_resource::<QualityReason>()
             .init_resource::<DisableSet>()
+            .init_resource::<EnvMode>()
             .init_resource::<FrameClock>()
             .insert_resource(shared.clone())
             .init_resource::<ReadyFrames>()
-            .add_systems(Update, (log_render_setup, update_ready, freeze_environment))
+            .add_systems(
+                Update,
+                (
+                    log_render_setup,
+                    update_ready,
+                    freeze_environment,
+                    strip_clearcoat,
+                ),
+            )
             .add_systems(First, main_clock_start)
             .add_systems(Last, main_clock_end);
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
@@ -411,6 +556,20 @@ impl Plugin for DiagnosticsPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn env_modes_parse_and_single_masks_binding_arrays() {
+        for n in ENV_MODE_NAMES {
+            assert_eq!(EnvMode::parse(n).unwrap().label(), n);
+        }
+        assert!(EnvMode::parse("arrays").is_err());
+        assert_eq!(EnvMode::default(), EnvMode::Array);
+        assert!(EnvMode::Array.disabled_features().is_none());
+        assert_eq!(
+            EnvMode::Single.disabled_features(),
+            Some(WgpuFeatures::TEXTURE_BINDING_ARRAY)
+        );
+    }
 
     #[test]
     fn parses_lists_and_rejects_typos() {

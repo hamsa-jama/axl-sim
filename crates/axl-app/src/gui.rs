@@ -7,7 +7,7 @@ use axl_render::bevy::window::PresentMode;
 use axl_render::camera_rig::{
     ActiveQuality, CameraHome, CameraMode, CameraSettings, UiCapture, ViewCamera, gizmo_axes,
 };
-use axl_render::diagnostics::DisableSet;
+use axl_render::diagnostics::{DisableSet, EnvMode};
 use axl_render::grid::{CursorOnFloor, GridSettings, Measure, ViewMode};
 use axl_render::grid_math::GridUnits;
 use axl_render::quality::QualityPreset;
@@ -94,6 +94,19 @@ pub fn run(args: &Args) -> AppExit {
         }
     };
 
+    let env_mode = match args.env_mode.as_deref().map(EnvMode::parse) {
+        Some(Ok(m)) => m,
+        Some(Err(e)) => {
+            eprintln!("axl: --env-mode: {e}");
+            return AppExit::error();
+        }
+        None => EnvMode::default(),
+    };
+    let mut disable = disable;
+    if env_mode == EnvMode::Ambient {
+        disable.env = true;
+    }
+
     let options = RenderOptions {
         quality,
         content: match args.stress_boxes {
@@ -124,6 +137,7 @@ pub fn run(args: &Args) -> AppExit {
         },
         camera_pose: args.camera_pose.as_deref().and_then(parse_pose),
         disable,
+        env_mode,
         quality_reason: reason,
     };
 
@@ -140,6 +154,7 @@ pub fn run(args: &Args) -> AppExit {
     // and WGPU_BACKEND in the environment still override this, so the owner can test other adapters.
     let wgpu = WgpuSettings {
         power_preference: PowerPreference::from_env().unwrap_or(PowerPreference::HighPerformance),
+        disabled_features: env_mode.disabled_features(),
         ..default()
     };
     app.add_plugins(
