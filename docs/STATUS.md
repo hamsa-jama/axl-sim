@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M4 is accepted and merged into `main` (merge commit 8ddb35b). Next, per the coordinator: branch `fix/env-lighting` (environment map cost and crisp softbox reflections, perf-summary regression, decision 0008), then M5 Compiler. Open items: owner checks O10 and O11 below.
+M4 is accepted and merged into `main` (merge commit 8ddb35b). `fix/env-lighting` is merged (01c319c): per-pass perf lines restored with a test, dimmer room with discrete softboxes, `environment.cube_size`, decision 0008. Crisp softbox reflections were NOT achieved (see 0008: Bevy's prefilter blurs them; a custom CPU-baked prefiltered map is the follow-up). M5 Compiler is not started. Open items: owner checks O10, O11, and re-measure env cost on the laptop (docs/perf.md).
 
 ## Owner checks
 
