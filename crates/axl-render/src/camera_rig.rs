@@ -13,9 +13,10 @@ use bevy::light::{
 use bevy::pbr::{
     ContactShadows, ScreenSpaceAmbientOcclusion, ScreenSpaceAmbientOcclusionQualityLevel,
 };
-use bevy::post_process::bloom::Bloom;
+use bevy::post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter};
 use bevy::prelude::*;
 use bevy::render::camera::{MipBias, TemporalJitter};
+use bevy::render::view::{ColorGrading, ColorGradingGlobal};
 
 use crate::frames::axl_to_bevy;
 use crate::lighting::{srgb, LightingConfig};
@@ -128,6 +129,16 @@ pub fn top_down_transform(focus: Vec3, height: f32) -> Transform {
     Transform::from_translation(f + Vec3::Y * height).looking_at(f, Vec3::NEG_Z)
 }
 
+/// Bloom that only lets highlights glow: additive, with a threshold above the floor's brightness.
+fn studio_bloom(intensity: f32) -> Bloom {
+    Bloom {
+        intensity,
+        composite_mode: BloomCompositeMode::Additive,
+        prefilter: BloomPrefilter { threshold: 1.0, threshold_softness: 0.6 },
+        ..Bloom::NATURAL
+    }
+}
+
 /// Spawn the view camera and the key light, applying `quality`.
 pub fn spawn_view_camera(
     commands: &mut Commands,
@@ -160,13 +171,20 @@ pub fn spawn_view_camera(
             Msaa::Off,
             Tonemapping::AgX,
             exposure,
+            ColorGrading {
+                global: ColorGradingGlobal {
+                    post_saturation: lighting.camera.post_saturation,
+                    ..default()
+                },
+                ..default()
+            },
             pan,
             GeneratedEnvironmentMapLight {
                 environment_map: env,
                 intensity: lighting.environment.intensity,
                 ..default()
             },
-            Bloom { intensity: lighting.bloom.intensity, ..Bloom::NATURAL },
+            studio_bloom(lighting.bloom.intensity),
         ))
         .id();
 
@@ -178,6 +196,9 @@ pub fn spawn_view_camera(
             color: srgb(lighting.key_light.color_srgb),
             illuminance: lighting.key_light.illuminance_lux,
             shadow_maps_enabled: true,
+            // The default biases are tuned for metre-scale scenes; parts are centimetres.
+            shadow_depth_bias: 0.0003,
+            shadow_normal_bias: 0.4,
             ..default()
         },
         Transform::from_translation(Vec3::ZERO).looking_to(dir, Vec3::Y),
@@ -264,7 +285,7 @@ fn apply_camera_mode(
     }
     let first = last.is_none();
     *last = Some(*mode);
-    if first {
+    if first && *mode == CameraMode::Orbit {
         return; // spawn_view_camera already set up the default orbit view
     }
     let Ok((mut tf, mut projection, mut pan)) = cams.single_mut() else {
@@ -280,6 +301,9 @@ fn apply_camera_mode(
             });
             *tf = top_down_transform(home.focus, 1.5);
             pan.enabled_motion.orbit = false;
+            // Keep the camera exactly 1.5 m above the floor; the controller would otherwise
+            // push it away to a distance based on the projection scale.
+            pan.orthographic.near_clip_limits = 1.5..1.5;
             pan.last_anchor_depth = -1.5;
         }
         CameraMode::Orbit | CameraMode::Follow => {
@@ -371,10 +395,11 @@ pub fn apply_quality(
         }
     }
     if q.bloom {
-        e.insert(Bloom { intensity: lighting.bloom.intensity, ..Bloom::NATURAL });
+        e.insert(studio_bloom(lighting.bloom.intensity));
     }
     if q.contact_shadows {
-        e.insert(ContactShadows::default());
+        // Distances are in metres; the defaults (30 cm rays) are far too long for small parts.
+        e.insert(ContactShadows { linear_steps: 16, thickness: 0.004, length: 0.03 });
     }
     if q.ao != AoLevel::Off {
         let level = match q.ao {
@@ -385,8 +410,8 @@ pub fn apply_quality(
         // Radius is in view-space metres; parts are centimetres across.
         e.insert(ScreenSpaceAmbientOcclusion {
             quality_level: level,
-            radius: 0.02,
-            constant_object_thickness: 0.01,
+            radius: 0.012,
+            constant_object_thickness: 0.006,
         });
     }
     e.insert(if q.shadows.soft && q.aa == AaMode::Taa {

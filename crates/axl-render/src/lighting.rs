@@ -126,6 +126,8 @@ pub struct CameraConfig {
     pub near_m: f32,
     /// Far plane in metres (spec: 100 m).
     pub far_m: f32,
+    /// Colour saturation applied after AgX tonemapping (1.0 is neutral). AgX desaturates highlights.
+    pub post_saturation: f32,
 }
 
 impl CameraConfig {
@@ -341,6 +343,7 @@ mod tests {
             fov_deg: 35.0,
             near_m: 0.005,
             far_m: 100.0,
+            post_saturation: 1.0,
         };
         assert!((c.ev100() - 2000.0f32.log2()).abs() < 1e-4);
     }

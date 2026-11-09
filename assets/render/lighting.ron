@@ -19,20 +19,22 @@
     ),
     environment: (
         // Scale from the relative radiance of the generated studio cubemap to cd/m2.
-        intensity: 2800.0,
+        intensity: 800.0,
         backdrop_srgb: (0.80, 0.81, 0.82),
     ),
     camera: (
         // Physical exposure: EV100 = log2(N^2 * 100 / (t * ISO)).
         aperture_f: 4.0,
-        shutter_s: 0.008,
+        shutter_s: 0.0067,
         iso: 100.0,
         fov_deg: 35.0,
         near_m: 0.005,
         far_m: 100.0,
+        // AgX flattens colour; a little saturation restores the moulded-plastic look.
+        post_saturation: 1.15,
     ),
     floor: (
-        base_srgb: (0.80, 0.81, 0.82),
+        base_srgb: (0.78, 0.79, 0.80),
         roughness: 0.75,
         reflectance: 0.3,
         // How strongly grid lines darken the floor (before lighting), per line family.
@@ -40,5 +42,5 @@
         major_ink: 0.45,
         bold_ink: 0.60,
     ),
-    bloom: (intensity: 0.12),
+    bloom: (intensity: 0.20),
 )

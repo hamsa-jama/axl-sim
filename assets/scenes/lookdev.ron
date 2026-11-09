@@ -12,8 +12,8 @@
     items: [
         (
             name: "brick_2x4",
-            pos_mm: (-120.0, 40.0, 0.0),
-            yaw_deg: 18.0,
+            pos_mm: (58.9, -42.9, 0.0),
+            yaw_deg: 20.0,
             shapes: [
                 (shape: Box(size_mm: (31.8, 15.8, 9.6), bevel_mm: 0.15), offset_mm: (0.0, 0.0, 4.8), color: "red", material: Abs),
                 (shape: Studs(nx: 4, ny: 2), offset_mm: (0.0, 0.0, 9.6), color: "red", material: Abs),
@@ -21,8 +21,8 @@
         ),
         (
             name: "beam_7",
-            pos_mm: (-30.0, 120.0, 0.0),
-            yaw_deg: -24.0,
+            pos_mm: (10.3, 84.3, 0.0),
+            yaw_deg: -35.0,
             shapes: [
                 (shape: Box(size_mm: (55.2, 7.2, 7.2), bevel_mm: 0.3), offset_mm: (0.0, 0.0, 3.6), color: "blue", material: Abs),
                 (shape: Cylinder(radius_mm: 2.4, length_mm: 7.3, axis: Y), offset_mm: (-24.0, 0.0, 3.6), color: "black", material: Abs),
@@ -36,7 +36,7 @@
         ),
         (
             name: "gear_24",
-            pos_mm: (60.0, 95.0, 0.0),
+            pos_mm: (3.5, 28.1, 0.0),
             yaw_deg: 0.0,
             shapes: [
                 (shape: Gear(teeth: 24, thickness_mm: 3.2), offset_mm: (0.0, 0.0, 1.6), color: "yellow", material: Abs),
@@ -44,8 +44,8 @@
         ),
         (
             name: "wheel_56",
-            pos_mm: (120.0, 20.0, 0.0),
-            yaw_deg: 35.0,
+            pos_mm: (74.4, 83.6, 0.0),
+            yaw_deg: 200.0,
             shapes: [
                 (shape: Cylinder(radius_mm: 28.0, length_mm: 14.0, axis: Y), offset_mm: (0.0, 0.0, 28.0), color: "black", material: Rubber),
                 (shape: Cylinder(radius_mm: 17.0, length_mm: 14.6, axis: Y), offset_mm: (0.0, 0.0, 28.0), color: "white", material: Abs),
@@ -54,8 +54,8 @@
         ),
         (
             name: "rover",
-            pos_mm: (-5.0, -75.0, 0.0),
-            yaw_deg: 28.0,
+            pos_mm: (-64.7, -63.3, 0.0),
+            yaw_deg: 0.0,
             shapes: [
                 // chassis plate, hub, motors
                 (shape: Box(size_mm: (87.8, 55.8, 3.2), bevel_mm: 0.15), offset_mm: (0.0, 0.0, 19.6), color: "dark_grey", material: Abs),

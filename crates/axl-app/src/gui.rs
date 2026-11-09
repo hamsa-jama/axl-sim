@@ -29,7 +29,10 @@ struct SettingsStore {
 /// Open the AXL window and run until it is closed.
 pub fn run(args: &Args) -> AppExit {
     // Screenshot, stress and perf runs never read or write the user's settings.
-    let scripted = args.lookdev || args.stress_boxes.is_some() || args.perf_seconds.is_some();
+    let scripted = args.lookdev
+        || args.stress_boxes.is_some()
+        || args.perf_seconds.is_some()
+        || args.screenshot.is_some();
     let path = (!scripted).then(Settings::default_path).flatten();
     let current = match &path {
         Some(p) => Settings::load(p).unwrap_or_else(|e| {
@@ -61,18 +64,32 @@ pub fn run(args: &Args) -> AppExit {
         screenshot: args.screenshot.clone(),
         benchmark,
         perf_seconds: args.perf_seconds,
+        view_mode: match args.view.as_deref() {
+            Some("simulate") => ViewMode::Simulate,
+            _ => ViewMode::Builder,
+        },
+        camera_mode: match args.camera.as_deref() {
+            Some("follow") => CameraMode::Follow,
+            Some("top-down") => CameraMode::TopDown,
+            _ => CameraMode::Orbit,
+        },
+        camera_pose: args.camera_pose.as_deref().and_then(parse_pose),
     };
 
+    let size = args
+        .window_size
+        .as_deref()
+        .and_then(|s| s.split_once('x'))
+        .and_then(|(w, h)| Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?)))
+        .filter(|(w, h)| *w >= 320 && *h >= 240);
     let big_window = args.lookdev || args.stress_boxes.is_some();
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: "AXL".into(),
-            resolution: if big_window {
-                (1920u32, 1080u32).into()
-            } else {
-                (1280u32, 800u32).into()
-            },
+            resolution: size
+                .unwrap_or(if big_window { (1920, 1080) } else { (1280, 800) })
+                .into(),
             // Frame-rate checks must not be capped by the monitor.
             present_mode: if args.perf_seconds.is_some() {
                 PresentMode::AutoNoVsync
@@ -86,7 +103,11 @@ pub fn run(args: &Args) -> AppExit {
     .add_plugins(EguiPlugin::default())
     .insert_resource(FramesLeft(args.exit_after_frames))
     .insert_resource(GridSettings {
-        units: current.units,
+        units: match args.units.as_deref() {
+            Some("metric") => GridUnits::Metric,
+            Some("studs") => GridUnits::Studs,
+            _ => current.units,
+        },
         opacity_builder: current.grid_opacity_builder,
         opacity_simulate: current.grid_opacity_simulate,
         ..default()
@@ -97,6 +118,20 @@ pub fn run(args: &Args) -> AppExit {
     .add_systems(Update, (exit_when_done, forward_egui_capture, persist_settings, remember_benchmark))
     .add_systems(EguiPrimaryContextPass, (control_bar, status_bar, gizmo_overlay).chain());
     app.run()
+}
+
+/// Parse `fx,fy,fz,yaw,pitch,distance` (mm and degrees) into a camera home.
+fn parse_pose(s: &str) -> Option<CameraHome> {
+    let v: Vec<f32> = s.split(',').map(|p| p.trim().parse().ok()).collect::<Option<_>>()?;
+    let [fx, fy, fz, yaw, pitch, dist] = v[..] else {
+        return None;
+    };
+    Some(CameraHome {
+        focus: Vec3::new(fx, fy, fz) * 0.001,
+        yaw_deg: yaw,
+        pitch_deg: pitch,
+        distance: dist * 0.001,
+    })
 }
 
 /// Tell the 3D view when egui is using the mouse or keyboard.

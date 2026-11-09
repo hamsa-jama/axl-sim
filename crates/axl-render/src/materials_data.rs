@@ -160,8 +160,8 @@ pub fn micro_surface_normal_map(size: usize, strength: f32, seed: u64) -> Vec<u8
     for y in 0..size as isize {
         for x in 0..size as isize {
             // Central differences, scaled so a full-range ramp over the texture leans by `strength`.
-            let dx = (at(x + 1, y) - at(x - 1, y)) * 0.5 * size as f32 / 8.0;
-            let dy = (at(x, y + 1) - at(x, y - 1)) * 0.5 * size as f32 / 8.0;
+            let dx = (at(x + 1, y) - at(x - 1, y)) * 0.5 * size as f32 / 24.0;
+            let dy = (at(x, y + 1) - at(x, y - 1)) * 0.5 * size as f32 / 24.0;
             let n = [-dx * strength, -dy * strength, 1.0];
             let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
             for c in n {

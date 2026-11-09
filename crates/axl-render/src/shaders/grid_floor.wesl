@@ -93,7 +93,7 @@ fn fragment(
     let line_px = grid.spacing.w;
     let min_px = grid.fade.z;
     let opacity = grid.ink.w;
-    let dfade = distance_fade(distance(view.world_position, in.world_position), grid.fade.x, grid.fade.y);
+    let dfade = distance_fade(distance(view.world_position, in.world_position.xyz), grid.fade.x, grid.fade.y);
 
     // Grid lines: the strongest family wins at a crossing so ink never double-darkens.
     let minor = family(uv, grid.spacing.x, line_px, min_px) * grid.ink.x;

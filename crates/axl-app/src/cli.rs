@@ -28,8 +28,8 @@ pub struct Args {
     #[arg(long, conflicts_with = "headless")]
     pub lookdev: bool,
 
-    /// With `--lookdev`, save a screenshot to this path and exit.
-    #[arg(long, value_name = "PATH", requires = "lookdev")]
+    /// Save a screenshot of the window to this path once the image has settled, then exit.
+    #[arg(long, value_name = "PATH", conflicts_with = "headless")]
     pub screenshot: Option<PathBuf>,
 
     /// Render this many boxes moving through the snapshot path, for the frame-rate check.
@@ -43,6 +43,26 @@ pub struct Args {
     /// Run for this many seconds, then print a frame-time summary and exit (frame-rate checks).
     #[arg(long, value_name = "SECONDS", conflicts_with = "headless")]
     pub perf_seconds: Option<f32>,
+
+    /// Window size as WIDTHxHEIGHT, for example 960x540 (faster look-dev iteration under software rendering).
+    #[arg(long, value_name = "WxH", hide = true, conflicts_with = "headless")]
+    pub window_size: Option<String>,
+
+    /// Start with the stud or metric grid: studs or metric.
+    #[arg(long, value_name = "UNITS", hide = true, conflicts_with = "headless")]
+    pub units: Option<String>,
+
+    /// Start in the builder or simulate view (changes the default grid opacity).
+    #[arg(long, value_name = "MODE", hide = true, conflicts_with = "headless")]
+    pub view: Option<String>,
+
+    /// Start in this camera mode: orbit, follow or top-down.
+    #[arg(long, value_name = "MODE", hide = true, conflicts_with = "headless")]
+    pub camera: Option<String>,
+
+    /// Camera pose as FOCUS_X,FOCUS_Y,FOCUS_Z,YAW,PITCH,DISTANCE (millimetres and degrees).
+    #[arg(long, value_name = "POSE", hide = true, conflicts_with = "headless")]
+    pub camera_pose: Option<String>,
 
     /// Exit after this many rendered frames. For smoke tests.
     #[arg(long, value_name = "N", hide = true, conflicts_with = "headless")]

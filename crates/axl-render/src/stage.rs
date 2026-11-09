@@ -39,6 +39,12 @@ pub struct RenderOptions {
     pub benchmark: bool,
     /// Exit after this many seconds and print a frame-time summary.
     pub perf_seconds: Option<f32>,
+    /// Start in this view mode (grid opacity default follows it).
+    pub view_mode: crate::grid::ViewMode,
+    /// Start in this camera mode.
+    pub camera_mode: crate::camera_rig::CameraMode,
+    /// Replace the scene's camera: focus (m, AXL), yaw, pitch (degrees) and distance (m).
+    pub camera_pose: Option<CameraHome>,
 }
 
 impl Default for RenderOptions {
@@ -49,6 +55,9 @@ impl Default for RenderOptions {
             screenshot: None,
             benchmark: false,
             perf_seconds: None,
+            view_mode: crate::grid::ViewMode::Builder,
+            camera_mode: crate::camera_rig::CameraMode::Orbit,
+            camera_pose: None,
         }
     }
 }
@@ -63,7 +72,19 @@ pub struct BenchmarkFinished {
 }
 
 /// Frames to let the image settle before a screenshot (shader compile, environment filter, TAA).
-const SETTLE_FRAMES: u32 = 120;
+const SETTLE_FRAMES: u32 = 90;
+
+/// Settle frames, overridable with `AXL_SETTLE_FRAMES` for quick look-dev iteration.
+fn settle_frames() -> u32 {
+    std::env::var("AXL_SETTLE_FRAMES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(SETTLE_FRAMES)
+}
+
+/// Camera pose requested on the command line, applied over the scene's own.
+#[derive(Resource)]
+struct StartPose(Option<CameraHome>);
 
 #[derive(Resource)]
 struct LookdevCapture {
@@ -91,6 +112,9 @@ impl Plugin for StagePlugin {
         let opts = self.0.clone();
         let lighting = LightingConfig::load_or_default();
         app.insert_resource(lighting)
+            .insert_resource(opts.view_mode)
+            .insert_resource(opts.camera_mode)
+            .insert_resource(StartPose(opts.camera_pose))
             .insert_resource(ActiveQuality(opts.quality))
             .insert_resource(GlobalAmbientLight::NONE)
             .init_resource::<SnapshotBuffer>()
@@ -146,6 +170,7 @@ fn setup_stage(
     quality: Res<ActiveQuality>,
     scene: Option<Res<SceneDef>>,
     stress: Option<Res<StressBoxes>>,
+    start_pose: Res<StartPose>,
 ) {
     let root = spawn_root(&mut commands);
     spawn_floor(&mut commands, root, &mut meshes, &mut grid_mats, &lighting, &grid);
@@ -173,6 +198,9 @@ fn setup_stage(
             };
             spawn_stress_boxes(&mut commands, root, stress.0, &mut builder);
         }
+    }
+    if let Some(pose) = start_pose.0 {
+        home = pose;
     }
     commands.insert_resource(parts);
     commands.insert_resource(FocusTarget(focus));
@@ -215,7 +243,7 @@ fn lookdev_capture(
     mut exit: MessageWriter<AppExit>,
 ) {
     cap.frame += 1;
-    if cap.requested_at.is_none() && cap.frame >= SETTLE_FRAMES {
+    if cap.requested_at.is_none() && cap.frame >= settle_frames() {
         cap.requested_at = Some(cap.frame);
         let path = cap.path.clone();
         if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
