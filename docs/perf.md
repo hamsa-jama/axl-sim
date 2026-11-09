@@ -208,12 +208,12 @@ Which path each adapter takes, as measured with the new start-up log line
   ANV advertises the features it takes ARRAY too. Non-uniform indexed descriptor arrays are known to
   be slow on Gen9 hardware, which is the leading suspect.
 
-`--env-mode` (diagnostic only; the default is unchanged):
+`--env-mode` (since decision 0011 the default is `single`; the others are diagnostics):
 
 | Mode | What it does |
 | --- | --- |
-| `array` | Default. The path the adapter allows. |
-| `single` | Masks `TEXTURE_BINDING_ARRAY` in `WgpuSettings.disabled_features`, so Bevy compiles the single-cube path. |
+| `array` | The path the adapter allows (the old default). |
+| `single` | Default. Masks `TEXTURE_BINDING_ARRAY` in `WgpuSettings.disabled_features`, so Bevy compiles the single-cube path. |
 | `diffuse-only` | Keeps the diffuse map, replaces the specular map by a 1x1 black cube (the shader still samples, but from one texel). |
 | `specular-only` | The reverse. |
 | `ambient` | No environment map, flat ambient light (same as `--disable env`). |
@@ -235,3 +235,47 @@ and probe-iterator path (fix: force the single path when the adapter is slow, or
 If `no-clearcoat` is about half of the env cost, the clearcoat's second lookup matters (fix: drop the
 clearcoat on Low and Medium). If only `ambient` is cheap, the cost is the cube sampling itself
 (fix: smaller or `Rg11b10Ufloat` maps, a custom baked map).
+
+## Environment-light cost: owner measurement and the `single` default (decision 0011)
+
+Laptop UHD 620 (main at 211cde1), `--lookdev --quality low --perf-seconds 10`:
+
+| mode | fps | p99 ms | opaque ms | GPU total ms |
+| --- | --- | --- | --- | --- |
+| array (old default) | 37.8 | 28.6 | 22.5 | 25.3 |
+| single | 52.6 | 20.2 | 14.1 | 17.1 |
+| diffuse-only | 38.4 | 27.8 | 22.0 | 24.8 |
+| specular-only | 37.7 | 28.6 | 22.6 | 25.4 |
+| no-clearcoat | 40.2 | 26.5 | 20.9 | 23.8 |
+| ambient | 63.6 | 17.2 | 11.4 | 14.1 |
+
+The cost is the binding-array, clustered light-probe path itself. `single` is now the default for
+every preset.
+
+What masking `TEXTURE_BINDING_ARRAY` switches off in Bevy 0.20.1 (source reading,
+`bevy_pbr::light_probe::binding_arrays_are_usable` and `bevy_render_macros::as_bind_group`):
+reflection probes in arrays and more than one irradiance volume (AXL uses neither: one environment
+map on the camera), bindless lightmaps (unused), clustered decals (unused), the bindless
+`StandardMaterial` path (materials then get one bind group each instead of sharing slabs), and the
+array variants of the prepass, deferred and SSR shaders. The bindless material path is the only
+loss that could matter, as CPU work on the render thread when there are many distinct materials.
+Bevy has no narrower switch: probes, lightmaps, decals and bindless materials all test the same
+features and limits, and lowering the binding-array limits would break bindless materials instead.
+
+CPU times in the sandbox (llvmpipe, release build, Low, 8 s each; a software rasteriser, so
+`render_ms` is dominated by rasterising and says nothing about a real GPU):
+
+| scene | mode | avg ms | main ms | render ms |
+| --- | --- | --- | --- | --- |
+| 200 boxes | array | 304.6 | 4.6 | 303.8 |
+| 200 boxes | single | 285.5 | 12.0 | 284.5 |
+| lookdev | array | 354.9 | 7.2 | 353.8 |
+| lookdev | single | 323.7 | 7.3 | 322.8 |
+| sandbox rover | array | 374.7 | 8.2 | 373.8 |
+| sandbox rover | single | 344.0 | 6.8 | 342.9 |
+
+Main-thread time is the same within run-to-run noise (the 200-box main figure varies a lot between
+runs). The render-thread figure includes the software GPU, so it cannot show a CPU cost of losing
+bindless. Owner follow-up: on the laptop, compare `cpu main_ms` and `render_ms` of the 200-box
+scene for `--env-mode array` and `single` (GPU-bound there, so a CPU difference would show in
+`render_ms`).
