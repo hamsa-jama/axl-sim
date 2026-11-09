@@ -454,7 +454,8 @@ pub fn find_snap(
     });
     let mut seen = HashSet::new();
     // Rank: (overlaps?, push, distance to the ray in 0.1 mm, overlap count).
-    let mut best: Option<((usize, usize, i64, usize), [i32; 3], Snap)> = None;
+    type Rank = (usize, usize, i64, usize);
+    let mut best: Option<(Rank, [i32; 3], Snap)> = None;
     for c in cands.into_iter().filter(|c| seen.insert(c.anchor)).take(48) {
         let ev = evaluate(cat, ctx, items, c.anchor);
         let rank = (

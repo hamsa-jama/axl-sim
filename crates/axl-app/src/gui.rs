@@ -15,7 +15,7 @@ use axl_render::{BenchmarkFinished, RenderOptions, StageContent, StagePlugin};
 use bevy_egui::input::EguiWantsInput;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 
-use crate::browser_ui::{LeftInset, browser_panel};
+use crate::browser_ui::{LeftInset, TopInset, browser_panel};
 use crate::cli::Args;
 use crate::settings::Settings;
 
@@ -187,6 +187,7 @@ pub fn run(args: &Args) -> AppExit {
     })
     .insert_resource(SettingsStore { current, path })
     .init_resource::<LeftInset>()
+    .init_resource::<TopInset>()
     .init_resource::<crate::builder_ui::BuilderUi>()
     .add_plugins(StagePlugin(options))
     .add_systems(
@@ -285,10 +286,11 @@ fn control_bar(
     measure: Res<Measure>,
     home: Res<CameraHome>,
     mut cams: Query<&mut Transform, With<ViewCamera>>,
+    mut top: ResMut<TopInset>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let mut root = viewport_ui(ctx);
-    egui::Panel::top("controls").show(&mut root, |ui| {
+    let bar = egui::Panel::top("controls").show(&mut root, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label("Quality");
             let before = quality.0;
@@ -368,6 +370,7 @@ fn control_bar(
             }
         });
     });
+    top.0 = bar.response.rect.bottom() - ctx.viewport_rect().top();
     Ok(())
 }
 

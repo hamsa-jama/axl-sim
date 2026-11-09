@@ -11,6 +11,10 @@ use bevy_egui::{EguiContexts, egui};
 #[derive(Resource, Default, Clone, Copy)]
 pub struct LeftInset(pub f32);
 
+/// Height of the control bar at the top (it wraps to two lines on narrow windows).
+#[derive(Resource, Default, Clone, Copy)]
+pub struct TopInset(pub f32);
+
 /// Stats of the selected part, computed once per selection.
 #[derive(Default)]
 pub struct StatsCache(Option<(String, PartStats)>);

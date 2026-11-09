@@ -9,7 +9,7 @@ use axl_render::builder_view::BuilderRes;
 use axl_render::materials_data::PART_COLORS;
 use bevy_egui::{EguiContexts, egui};
 
-use crate::browser_ui::LeftInset;
+use crate::browser_ui::{LeftInset, TopInset};
 
 /// Palette and bar state that is not part of the robot.
 #[derive(Resource, Default)]
@@ -71,6 +71,7 @@ pub fn builder_panels(
     res: Option<ResMut<BuilderRes>>,
     mut ui_state: ResMut<BuilderUi>,
     mut inset: ResMut<LeftInset>,
+    top: Res<TopInset>,
 ) -> Result {
     let Some(mut res) = res else { return Ok(()) };
     let ctx = contexts.ctx_mut()?;
@@ -81,7 +82,7 @@ pub fn builder_panels(
             .layer_id(egui::LayerId::background())
             // Leave room for the control bar above and the status bar below (other systems).
             .max_rect(egui::Rect::from_min_max(
-                ctx.viewport_rect().min + egui::vec2(0.0, 28.0),
+                ctx.viewport_rect().min + egui::vec2(0.0, top.0.max(28.0)),
                 ctx.viewport_rect().max - egui::vec2(0.0, 26.0),
             )),
     );

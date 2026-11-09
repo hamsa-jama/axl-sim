@@ -7,7 +7,6 @@
 
 use std::collections::BTreeMap;
 
-use axl_build::geom::WPrim;
 use axl_build::place::{Hit, Ray};
 use axl_build::validate::Level;
 use axl_build::{Builder, Orient, TurnAxis};
@@ -22,7 +21,7 @@ use crate::camera_rig::{
 use crate::frames::{AxlRoot, axl_to_bevy};
 use crate::grid::{CursorOnFloor, GridSettings, Measure, SurfacePicking};
 use crate::parts::PartLibrary;
-use crate::scene::{MaterialKind, PartMaterials, resolve_color};
+use crate::scene::{PartMaterials, resolve_color};
 
 const MM: f32 = 0.001;
 
@@ -272,6 +271,7 @@ fn builder_input(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn builder_sync(
     mut commands: Commands,
     res: Option<Res<BuilderRes>>,
@@ -370,7 +370,7 @@ fn builder_ghost(
         let parent = commands
             .spawn((
                 GhostPart,
-                Transform::from(part_transform(pos, it.orient, fz)),
+                part_transform(pos, it.orient, fz),
                 Visibility::default(),
             ))
             .id();
@@ -402,7 +402,6 @@ fn builder_ghost(
                 .id();
             commands.entity(parent).add_child(child);
         }
-        let _ = MaterialKind::Abs;
     }
 }
 
@@ -542,10 +541,6 @@ fn builder_overlays(
             g.line(axl_to_bevy(*a), axl_to_bevy(*b2), col);
         }
     }
-    let _ = WPrim::Sphere {
-        c: [0.0; 3],
-        r: 0.0,
-    };
 }
 
 /// Test aid for scripted runs: when `AXL_BUILDER_PROBE=<path>` is set, the points listed in
@@ -592,4 +587,26 @@ fn probe(
     let mut p = path.clone();
     p.push(".out");
     let _ = std::fs::write(p, out);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn part_transform_places_in_metres_and_lifts_by_the_floor() {
+        let t = part_transform([400, -800, 0], Orient::IDENTITY, -40.0);
+        assert!((t.translation - Vec3::new(0.04, -0.08, 0.04)).length() < 1e-6);
+        let turned = part_transform([0; 3], Orient::IDENTITY.turned(TurnAxis::Z), 0.0);
+        assert!((turned.rotation * Vec3::X - Vec3::Y).length() < 1e-6);
+    }
+
+    #[test]
+    fn measure_on_a_surface_uses_the_3d_distance() {
+        let mut m = Measure::default();
+        m.click3(Vec3::new(0.0, 0.0, 0.0));
+        m.click3(Vec3::new(0.0, 0.0, 0.0192));
+        assert!((m.distance_mm().unwrap() - 19.2).abs() < 1e-3);
+        assert!(!m.all_on_floor());
+    }
 }
