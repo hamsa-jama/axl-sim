@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 axl-compile = { path = "../axl-compile" }
 axl-mujoco = { path = "../axl-mujoco" }
+axl-hw = { path = "../axl-hw" }
 crossbeam-channel = "0.5"
 triple_buffer = "9"
 thiserror = "2"

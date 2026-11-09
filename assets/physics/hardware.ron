@@ -75,7 +75,7 @@
         start_soc: 0.9,
     ),
     // Built-in motor loops. speed_kp and speed_ki are from SPEC "Motor command modes";
-    // position_kp (1/s) is NOT in the spec: a control-design choice, decision 0011.
+    // position_kp (1/s) is NOT in the spec: a control-design choice, decision 0012.
     // done_* are the spec's "done" criteria for position mode.
     control: (
         speed_kp: 0.6,

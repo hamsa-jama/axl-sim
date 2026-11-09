@@ -2,6 +2,8 @@
 //! accelerometer. Each samples at its update rate into a [`DelayQueue`], adds seeded noise, and
 //! has the spec's blind spots. Nothing here allocates after construction.
 
+#![allow(clippy::needless_range_loop)]
+
 use axl_mujoco::{GeomId, GroupMask, Physics, SensorId, SiteId};
 
 use crate::mat::MatTexture;
@@ -133,7 +135,7 @@ impl Ultrasonic {
         for d in &self.dirs {
             let dir = combine(&axes, *d);
             if let Some(hit) = physics.ray(pos, dir, GroupMask::WORLD_AND_OBJECTS) {
-                // The surface must face the sensor within 40 degrees of its axis (decision 0011).
+                // The surface must face the sensor within 40 degrees of its axis (decision 0012).
                 let facing = -dot(hit.normal, axes[2]);
                 if hit.distance >= self.p.min_m
                     && hit.distance <= self.p.max_m
@@ -203,7 +205,7 @@ impl TimeOfFlight {
         &self.name
     }
 
-    /// One measurement now, with noise: metres, or -1. The median of the valid rays (decision 0011).
+    /// One measurement now, with noise: metres, or -1. The median of the valid rays (decision 0012).
     pub fn measure(&mut self, physics: &mut Physics) -> f64 {
         let Some((pos, axes)) = physics.site_frame(self.site) else {
             return -1.0;
@@ -224,7 +226,7 @@ impl TimeOfFlight {
         if n == 0 {
             return -1.0;
         }
-        // The median of the valid rays: robust at edges and on tilted walls (decision 0011).
+        // The median of the valid rays: robust at edges and on tilted walls (decision 0012).
         let v = &mut vals[..n];
         v.sort_by(f64::total_cmp);
         let d = if n % 2 == 1 {

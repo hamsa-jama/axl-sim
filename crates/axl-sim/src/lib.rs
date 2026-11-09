@@ -1,8 +1,9 @@
 //! axl-sim: the sim thread. It owns MuJoCo and steps it in lockstep at 1 ms, paced against the
 //! wall clock, and publishes a [`SimSnapshot`] of every body pose through a triple buffer.
 //!
-//! Milestone M5 has the sandbox drive: a compiled robot with fixed motor voltages. The hardware
-//! models (M6) and the controller (M7) join the step loop later.
+//! The step loop is `hw.pre_step`, `physics.step`, `hw.post_step` (battery, motors, encoders and
+//! sensors from `axl-hw`). The sandbox drives motors with fixed voltages; the controller (M7)
+//! joins the loop later.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -11,7 +12,9 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use axl_compile::Compiled;
-use axl_mujoco::{ActuatorId, BodyId, Physics, PhysicsError, Pose};
+use axl_hw::{Hardware, HwParams};
+pub use axl_hw::{HwOptions, MotorCommand};
+use axl_mujoco::{BodyId, Physics, PhysicsError, Pose};
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use triple_buffer::{Input, Output, triple_buffer};
 
@@ -53,6 +56,13 @@ pub enum Command {
     Reset,
     /// Pace against wall-clock time multiplied by this factor.
     SetSpeed(f64),
+    /// Give a motor a command (power, speed, position, brake, coast).
+    SetMotor {
+        /// Motor (device) name.
+        motor: String,
+        /// The command.
+        command: MotorCommand,
+    },
     /// Apply this voltage to a motor from now on.
     SetVolts {
         /// Motor (device) name.
@@ -64,11 +74,10 @@ pub enum Command {
     Stop,
 }
 
-/// The stepping core: physics plus the voltages to apply. Shared by the thread and the headless run.
+/// The stepping core: physics plus the hardware models. Shared by the thread and the headless run.
 pub struct SimCore {
     physics: Physics,
-    ctrl: Vec<(ActuatorId, f64)>,
-    names: Vec<(String, usize)>,
+    hw: Hardware,
     n_bodies: usize,
     last_publish: f64,
 }
@@ -76,18 +85,21 @@ pub struct SimCore {
 impl SimCore {
     /// Load a compiled robot. `volts` is `(motor name, volts)`.
     pub fn new(robot: &Compiled, volts: &[(String, f64)]) -> Result<Self, SimError> {
+        Self::with_options(robot, volts, HwOptions::default())
+    }
+
+    /// Load a compiled robot with explicit hardware options (seed, noise).
+    pub fn with_options(
+        robot: &Compiled,
+        volts: &[(String, f64)],
+        opts: HwOptions,
+    ) -> Result<Self, SimError> {
         let physics = Physics::from_mjcf(&robot.mjcf)?;
-        let mut names = Vec::new();
-        for d in &robot.devices.devices {
-            if let Some(a) = &d.actuator {
-                names.push((d.name.clone(), a.id));
-            }
-        }
+        let hw = Hardware::new(&robot.devices, &HwParams::builtin(), opts, &physics);
         let mut core = Self {
             n_bodies: physics.body_count(),
             physics,
-            ctrl: names.iter().map(|(_, id)| (ActuatorId(*id), 0.0)).collect(),
-            names,
+            hw,
             last_publish: f64::NEG_INFINITY,
         };
         for (m, v) in volts {
@@ -96,15 +108,18 @@ impl SimCore {
         Ok(core)
     }
 
+    /// Give a motor a command.
+    pub fn command(&mut self, motor: &str, command: MotorCommand) -> Result<(), SimError> {
+        self.hw
+            .motor_mut(motor)
+            .ok_or_else(|| SimError::NoMotor(motor.into()))?
+            .command(command);
+        Ok(())
+    }
+
     /// Set one motor's voltage.
     pub fn set_volts(&mut self, motor: &str, volts: f64) -> Result<(), SimError> {
-        let i = self
-            .names
-            .iter()
-            .position(|(n, _)| n == motor)
-            .ok_or_else(|| SimError::NoMotor(motor.into()))?;
-        self.ctrl[i].1 = volts;
-        Ok(())
+        self.command(motor, MotorCommand::Volts(volts))
     }
 
     /// Simulation time.
@@ -117,23 +132,31 @@ impl SimCore {
         &self.physics
     }
 
+    /// The hardware models, for readings.
+    pub fn hardware(&self) -> &Hardware {
+        &self.hw
+    }
+
     /// Back to the start.
     pub fn reset(&mut self) {
         self.physics.reset();
+        self.hw.reset(&self.physics);
         self.last_publish = f64::NEG_INFINITY;
     }
 
-    /// One 1 ms tick. Returns false when the simulation became unstable.
+    /// One 1 ms tick: hardware before, MuJoCo step, hardware after. Returns false when the
+    /// simulation became unstable.
     pub fn tick(&mut self) -> bool {
-        for (a, v) in &self.ctrl {
-            self.physics.set_ctrl(*a, *v);
-        }
+        self.hw.pre_step(&mut self.physics);
         self.physics.step();
+        self.hw.post_step(&mut self.physics);
         !self.physics.warnings().is_unstable()
     }
 
-    /// Write the current poses into `out` in place (no allocation after the first call).
-    pub fn fill(&self, out: &mut SimSnapshot) {
+    /// Write the current poses into `out` in place (no allocation after the first call). Velocities,
+    /// contacts and sensors describe the start of the step until `forward()` runs, so it runs first.
+    pub fn fill(&mut self, out: &mut SimSnapshot) {
+        self.physics.forward();
         out.time = self.physics.time();
         out.bodies.clear();
         out.bodies
@@ -229,14 +252,13 @@ fn sim_thread(
     let Ok(mut core) = SimCore::new(robot, volts) else {
         return;
     };
-    let publish = |core: &SimCore, out: &mut Input<SimSnapshot>, error: Option<&str>| {
+    let publish = |core: &mut SimCore, out: &mut Input<SimSnapshot>, error: Option<&str>| {
         let buf = out.input_buffer_mut();
         core.fill(buf);
         buf.error = error.map(str::to_owned);
         out.publish();
     };
-    core.physics.forward();
-    publish(&core, &mut out, None);
+    publish(&mut core, &mut out, None);
     let (mut paused, mut speed, mut failed) = (false, 1.0_f64, false);
     // Wall-clock origin and the simulated time it corresponds to.
     let mut origin = Instant::now();
@@ -253,11 +275,10 @@ fn sim_thread(
                 }
                 Command::Reset => {
                     core.reset();
-                    core.physics.forward();
                     failed = false;
                     origin = Instant::now();
                     origin_sim = 0.0;
-                    publish(&core, &mut out, None);
+                    publish(&mut core, &mut out, None);
                 }
                 Command::SetSpeed(s) => {
                     speed = s.clamp(0.1, 4.0);
@@ -266,6 +287,9 @@ fn sim_thread(
                 }
                 Command::SetVolts { motor, volts } => {
                     let _ = core.set_volts(&motor, volts);
+                }
+                Command::SetMotor { motor, command } => {
+                    let _ = core.command(&motor, command);
                 }
             }
         }
@@ -281,12 +305,12 @@ fn sim_thread(
         while core.time() < target.min(limit) {
             if !core.tick() {
                 failed = true;
-                publish(&core, &mut out, Some(UNSTABLE_MESSAGE));
+                publish(&mut core, &mut out, Some(UNSTABLE_MESSAGE));
                 break;
             }
             steps += 1;
             if core.due() {
-                publish(&core, &mut out, None);
+                publish(&mut core, &mut out, None);
             }
         }
         if steps == 0 {

@@ -29,7 +29,7 @@ pub struct ControlParams {
     pub speed_kp: f64,
     /// Speed loop integral gain, V/rad.
     pub speed_ki: f64,
-    /// Position loop gain (angle error to speed target), 1/s. Not in the spec (decision 0011).
+    /// Position loop gain (angle error to speed target), 1/s. Not in the spec (decision 0012).
     pub position_kp: f64,
     /// Position "done": error below this, degrees.
     pub done_error_deg: f64,

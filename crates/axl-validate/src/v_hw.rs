@@ -108,7 +108,13 @@ pub fn v08_blocked_shaft() -> TestResult {
             0.005,
             "N m",
         ),
-        Row::rel("stall current at 6 V", v / m.resistance, mo.current(), 0.005, "A"),
+        Row::rel(
+            "stall current at 6 V",
+            v / m.resistance,
+            mo.current(),
+            0.005,
+            "A",
+        ),
         Row::abs(
             "shaft speed",
             0.0,
@@ -138,8 +144,10 @@ pub fn v09_step_response() -> TestResult {
         Err(e) => return failed("V09", TITLE_V09, &e),
     };
     let mut hw = Hardware::new(&r.map, &HwParams::builtin(), quiet(), &r.physics);
-    let (Some(j), Ok(body)) = (hw.motor("m").map(|x| x.joint()), r.physics.body_id("rotor_m"))
-    else {
+    let (Some(j), Ok(body)) = (
+        hw.motor("m").map(|x| x.joint()),
+        r.physics.body_id("rotor_m"),
+    ) else {
         return failed("V09", TITLE_V09, "motor or rotor missing");
     };
     // J = the motor's reflected armature plus the rotor body's inertia about the hinge axis.
@@ -235,7 +243,8 @@ fn read_distances(w: &WorldSpec) -> Result<(f64, f64), String> {
     let get = |name: &str| -> Result<f64, String> {
         let h = hw.find(name).ok_or("device missing")?;
         let slot = hw.devices()[h].slot;
-        hw.distance(slot).ok_or_else(|| "not a distance sensor".to_owned())
+        hw.distance(slot)
+            .ok_or_else(|| "not a distance sensor".to_owned())
     };
     Ok((get("eye")?, get("tof")?))
 }
@@ -256,7 +265,13 @@ pub fn v16_distance_sensors() -> TestResult {
         title: TITLE_V16,
         rows: vec![
             Row::abs("ultrasonic, wall square at 0.5 m", 0.5, us0, 0.001, "m"),
-            Row::abs("time of flight, wall square at 0.5 m", 0.5, tof0, 0.001, "m"),
+            Row::abs(
+                "time of flight, wall square at 0.5 m",
+                0.5,
+                tof0,
+                0.001,
+                "m",
+            ),
             Row::abs("ultrasonic, wall angled 50 degrees", -1.0, us50, 1e-9, "m"),
             Row::abs(
                 "time of flight, wall angled 50 degrees",
@@ -317,13 +332,29 @@ pub fn v17_colour_edge() -> TestResult {
         id: "V17",
         title: TITLE_V17,
         rows: vec![
-            Row::abs("position where reflectance crosses 50%", 0.0, cross, 0.001, "m"),
+            Row::abs(
+                "position where reflectance crosses 50%",
+                0.0,
+                cross,
+                0.001,
+                "m",
+            ),
             Row::abs("reflectance on black", 0.0, curve[0].1, 1e-9, "%"),
-            Row::abs("reflectance on white", 100.0, curve[curve.len() - 1].1, 1e-9, "%"),
+            Row::abs(
+                "reflectance on white",
+                100.0,
+                curve[curve.len() - 1].1,
+                1e-9,
+                "%",
+            ),
             Row::check(
                 "reflectance never falls while moving onto white",
                 "monotonic",
-                if monotonic { "monotonic" } else { "not monotonic" },
+                if monotonic {
+                    "monotonic"
+                } else {
+                    "not monotonic"
+                },
                 monotonic,
             ),
         ],
@@ -356,7 +387,13 @@ pub fn v18_gyro_and_encoder() -> TestResult {
             angle += imu.gyro(hw.now_ms())[2] * 1e-3;
         }
     }
-    let gyro_row = Row::rel("integrated angle, 1 rad/s for 5 s", 5.0, angle, 0.001, "rad");
+    let gyro_row = Row::rel(
+        "integrated angle, 1 rad/s for 5 s",
+        5.0,
+        angle,
+        0.001,
+        "rad",
+    );
 
     // Encoder: spin a medium motor and check every reading.
     let pp = PhysicsParams::builtin();
@@ -394,7 +431,13 @@ pub fn v18_gyro_and_encoder() -> TestResult {
         Err(e) => enc_rows.push(Row::check("encoder rig", "loads", &e, false)),
     }
     let mut rows = vec![
-        Row::abs("hub spin rate set", 1.0, spin.unwrap_or(f64::NAN), 1e-9, "rad/s"),
+        Row::abs(
+            "hub spin rate set",
+            1.0,
+            spin.unwrap_or(f64::NAN),
+            1e-9,
+            "rad/s",
+        ),
         gyro_row,
     ];
     rows.extend(enc_rows);
