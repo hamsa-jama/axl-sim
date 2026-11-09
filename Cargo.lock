@@ -446,6 +446,11 @@ version = "0.1.0"
 [[package]]
 name = "axl-mujoco"
 version = "0.1.0"
+dependencies = [
+ "approx",
+ "mujoco-rs",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "axl-parts"
@@ -462,6 +467,11 @@ version = "0.1.0"
 [[package]]
 name = "axl-validate"
 version = "0.1.0"
+dependencies = [
+ "axl-mujoco",
+ "rand_chacha",
+ "sha2",
+]
 
 [[package]]
 name = "axl-world"
@@ -3052,6 +3062,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mujoco-rs"
+version = "6.1.0+mj-3.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4404946206be380eb5570474e6aad6e646d8692c383f433709c5585281361daf"
+dependencies = [
+ "bytemuck",
+ "log",
+ "paste",
+ "pkg-config",
+]
+
+[[package]]
 name = "mutants"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3586,6 +3608,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
 name = "peniko"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3716,6 +3744,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ppv-lite86"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
+dependencies = [
+ "zerocopy",
+]
+
+[[package]]
 name = "presser"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3788,8 +3825,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65c9fb96cbc91e3478eaae79a69fcd3f1ae4ad052e471fe6732fff548984b4af"
 dependencies = [
  "getrandom 0.4.3",
- "rand_core",
+ "rand_core 0.10.1",
 ]
+
+[[package]]
+name = "rand_chacha"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rand_core"

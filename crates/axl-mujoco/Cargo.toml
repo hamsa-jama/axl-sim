@@ -9,3 +9,8 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+mujoco-rs = "=6.1.0"
+thiserror = "2"
+
+[dev-dependencies]
+approx = "0.5"
