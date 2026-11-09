@@ -156,3 +156,20 @@ the effects those presets differ in. Notes from reading the code; none of these 
   floor ray code to map window positions into the smaller target. That touches the camera input, picking
   and egui, and cannot be verified without a real GPU. It is left for after the owner's `--disable`
   attribution shows whether fill rate is the problem.
+
+## Environment light (branch fix/env-lighting)
+
+llvmpipe (software Vulkan, 256-bit), `--stress-boxes 200 --quality low --perf-seconds 10 --window-size 960x540`.
+The numbers are only comparable with each other, not with a laptop GPU.
+
+| Run | avg ms | p99 ms | main_opaque_pass_3d ms |
+| --- | --- | --- | --- |
+| before, env on | 95.3 | 110.4 | 61.7 |
+| before, `--disable env` | 79.2 | 93.2 | 44.4 |
+| after, env on | 96.2 | 124.6 | 47.7 |
+| after, `--disable env` | 80.2 | 92.2 | 41.8 |
+
+The opaque pass is where the environment is sampled. Its env share dropped from about 17 ms to about 6 ms
+under llvmpipe. Frame averages did not move (the run-to-run spread under llvmpipe is several ms), so this
+sandbox cannot confirm the laptop target of 2 ms. Owner check: re-run the owner's table on the laptop.
+Per-pass lines (`perf: gpu  NN ms  render/...`) print again, sorted by cost, top-level passes only.

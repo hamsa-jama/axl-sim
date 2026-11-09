@@ -211,7 +211,9 @@ pub fn spawn_view_camera(
             ..default()
         });
     } else {
-        let env = images.add(crate::hdri::load_studio_cubemap(256));
+        let env = images.add(crate::hdri::load_studio_cubemap(
+            lighting.environment.cube_size.clamp(16, 1024),
+        ));
         commands.entity(cam).insert(GeneratedEnvironmentMapLight {
             environment_map: env,
             intensity: lighting.environment.intensity,

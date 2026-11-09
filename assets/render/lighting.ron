@@ -19,7 +19,7 @@
     ),
     environment: (
         // Scale from the relative radiance of the generated studio cubemap to cd/m2.
-        intensity: 130.0,
+        intensity: 800.0,
         backdrop_srgb: (0.80, 0.81, 0.82),
     ),
     camera: (
