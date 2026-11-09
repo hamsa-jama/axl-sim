@@ -21,12 +21,27 @@ Useful commands:
 | --- | --- |
 | `cargo run -p axl-app --release` | Open AXL (needs a display and a GPU). |
 | `cargo run -p axl-app --no-default-features -- --headless --version` | Headless binary without Bevy. Compiles in seconds. |
-| `cargo test --workspace` | All unit and integration tests. |
+| `cargo test --workspace` | All unit and integration tests (set the MuJoCo variables first). |
+| `cargo xtask validate` | The accuracy suite; writes `target/validation/report.md` and `report.json`. |
 | `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` | What CI checks first. |
 
 ## MuJoCo linking
 
-The environment variables for linking `mujoco-rs` against the downloaded library are added here in milestone M1, once `axl-mujoco` exists.
+`mujoco-rs` 6.1.0 links the shared library found through `MUJOCO_DYNAMIC_LINK_DIR` (an absolute path to the folder holding the library). The loader also needs to find the library at run time. `cargo xtask mujoco-env` prints both settings for this OS:
+
+```sh
+# Linux and macOS (bash):
+while IFS= read -r line; do export "$line"; done < <(cargo xtask mujoco-env)
+# CI appends the same lines to $GITHUB_ENV.
+```
+
+| OS | Link folder | Run-time search path |
+| --- | --- | --- |
+| Linux | `third_party/mujoco/3.12.0/linux/lib` | `LD_LIBRARY_PATH` |
+| Windows | `third_party/mujoco/3.12.0/windows/lib` (`mujoco.lib`) | `PATH` includes the `bin` folder (`mujoco.dll`) |
+| macOS | folder of `libmujoco*.dylib` inside `mujoco.framework` (found by xtask) | `DYLD_LIBRARY_PATH` |
+
+`cargo xtask validate` sets these itself. Release packages put the library next to the executable (milestone M10). The macOS lookup has not been run outside CI.
 
 ## Windows and macOS notes
 
