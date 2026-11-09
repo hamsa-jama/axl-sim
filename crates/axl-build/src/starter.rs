@@ -1,0 +1,136 @@
+//! The two starter robots, built through the same commands the UI issues.
+//!
+//! Each step names a part, how the user turns it, and where the cursor points. Positions are never
+//! written down: the snapping code finds them, exactly as it does when a learner builds the robot.
+//! `assets/robots/*.axlbot` are generated from these recipes and a test checks they still match.
+
+use axl_parts::catalog::Catalog;
+
+use crate::builder::{BuildError, Builder};
+use crate::model::{Assembly, Port};
+use crate::orient::TurnAxis;
+use crate::place::Ray;
+
+/// Where the cursor ray comes from, aimed at a point (mm, robot frame).
+#[derive(Clone, Copy, Debug)]
+pub enum Aim {
+    /// From above, straight down at (x, y).
+    Down(f64, f64),
+    /// From below, straight up at (x, y).
+    Up(f64, f64),
+    /// From the +Y side, heading -Y, at (x, z).
+    FromPosY(f64, f64),
+    /// From the -Y side, heading +Y, at (x, z).
+    FromNegY(f64, f64),
+}
+
+impl Aim {
+    fn ray(self) -> Ray {
+        let (origin, dir) = match self {
+            Aim::Down(x, y) => ([x, y, 400.0], [0.0, 0.0, -1.0]),
+            Aim::Up(x, y) => ([x, y, -400.0], [0.0, 0.0, 1.0]),
+            Aim::FromPosY(x, z) => ([x, 400.0, z], [0.0, -1.0, 0.0]),
+            Aim::FromNegY(x, z) => ([x, -400.0, z], [0.0, 1.0, 0.0]),
+        };
+        Ray { origin, dir }
+    }
+}
+
+/// One user action: pick a part, turn it, click.
+#[derive(Clone, Debug)]
+pub struct Step {
+    /// Part id.
+    pub part: &'static str,
+    /// Colour id.
+    pub color: &'static str,
+    /// Turns before the click, as the keys `R` (Z), `T` (X) and `Y` pressed in order.
+    pub turns: &'static str,
+    /// Cursor.
+    pub aim: Aim,
+    /// New device name, if the learner renames it.
+    pub name: Option<&'static str>,
+    /// New port, if the learner changes it.
+    pub port: Option<Port>,
+}
+
+fn step(part: &'static str, color: &'static str, turns: &'static str, aim: Aim) -> Step {
+    Step { part, color, turns, aim, name: None, port: None }
+}
+
+fn named(mut s: Step, name: &'static str) -> Step {
+    s.name = Some(name);
+    s
+}
+
+/// The Rover recipe: two medium motors, two 56 mm wheels, a caster, an ultrasonic sensor and a
+/// colour sensor, on an 8x16 plate under a hub. The motors, caster and colour sensor hang under
+/// the plate; the wheels sit outside it on 3-unit axles.
+pub fn rover_steps() -> Vec<Step> {
+    vec![
+        step("plate_8x16", "dark_grey", "", Aim::Down(0.0, 0.0)),
+        named(step("hub", "white", "", Aim::Down(0.0, 0.0)), "hub"),
+        named(step("sensor_ultrasonic", "black", "", Aim::Down(24.0, 0.0)), "eye"),
+        // Motors: the output face points outward (+Y on the left, -Y on the right).
+        named(step("motor_medium", "light_grey", "", Aim::Up(4.0, 37.25)), "left"),
+        named(step("motor_medium", "light_grey", "RR", Aim::Up(4.0, -37.25)), "right"),
+        step("axle_3", "dark_grey", "R", Aim::FromPosY(4.0, -12.0)),
+        step("axle_3", "dark_grey", "RRR", Aim::FromNegY(4.0, -12.0)),
+        step("wheel_56", "white", "T", Aim::FromPosY(4.0, -12.0)),
+        step("wheel_56", "white", "T", Aim::FromNegY(4.0, -12.0)),
+        // Caster stack at the back: two 2x2 bricks lift the ball to the wheels' floor line.
+        step("brick_2x2", "red", "", Aim::Up(-24.0, 0.0)),
+        step("brick_2x2", "red", "", Aim::Up(-24.0, 0.0)),
+        step("caster_ball", "dark_grey", "", Aim::Up(-24.0, 0.0)),
+        named(step("sensor_color", "white", "", Aim::Up(24.0, 0.0)), "color"),
+    ]
+}
+
+/// The Test chassis recipe: a hub on a plate, no other devices.
+pub fn test_chassis_steps() -> Vec<Step> {
+    vec![
+        step("plate_6x8", "dark_grey", "R", Aim::Down(0.0, 0.0)),
+        named(step("hub", "white", "", Aim::Down(0.0, 0.0)), "hub"),
+    ]
+}
+
+/// Run a recipe through the builder commands (pick, turn, hover, click, rename).
+pub fn run_steps(b: &mut Builder, steps: &[Step]) -> Result<(), BuildError> {
+    for s in steps {
+        b.start_place(s.part, Some(s.color))?;
+        for key in s.turns.chars() {
+            b.rotate_ghost(match key {
+                'R' => TurnAxis::Z,
+                'T' => TurnAxis::X,
+                _ => TurnAxis::Y,
+            });
+        }
+        b.hover(&s.aim.ray());
+        let uids = b.click_place()?;
+        if let Some(&uid) = uids.first() {
+            if let Some(n) = s.name {
+                b.set_device_name(uid, n)?;
+            }
+            if let Some(p) = s.port {
+                b.set_device_port(uid, p)?;
+            }
+        }
+    }
+    b.cancel();
+    Ok(())
+}
+
+/// Build a starter robot by id (`rover` or `test_chassis`).
+pub fn build_starter(cat: &Catalog, id: &str) -> Result<Assembly, BuildError> {
+    let (name, steps) = match id {
+        "rover" => ("Rover", rover_steps()),
+        "test_chassis" => ("Test chassis", test_chassis_steps()),
+        other => return Err(BuildError::UnknownPart(other.into())),
+    };
+    let mut b = Builder::new(cat.clone());
+    b.assembly.name = name.into();
+    run_steps(&mut b, &steps)?;
+    Ok(b.assembly.clone())
+}
+
+/// Starter robot ids and the file stem each is stored under.
+pub const STARTERS: [(&str, &str); 2] = [("rover", "rover"), ("test_chassis", "test_chassis")];
