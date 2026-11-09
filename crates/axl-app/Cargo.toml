@@ -24,6 +24,7 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axl-render = { path = "../axl-render", optional = true }
+axl-build = { path = "../axl-build" }
 directories = "6"
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"

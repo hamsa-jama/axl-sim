@@ -51,7 +51,8 @@ impl Default for GridSettings {
             units: GridUnits::Studs,
             opacity_builder: OPACITY_BUILDER,
             opacity_simulate: OPACITY_SIMULATE,
-            stud_dots: true,
+            // Off by default: the dots are a builder extra (the Builder screen switches them on).
+            stud_dots: false,
             measure_active: false,
         }
     }
@@ -90,8 +91,20 @@ impl GridParams {
     ) -> Self {
         let [minor, major, bold] = units.spacings();
         let c = cursor.unwrap_or(Vec2::ZERO);
-        let p0 = measure.points.first().copied().unwrap_or(Vec2::ZERO);
-        let p1 = measure.points.get(1).copied().unwrap_or(Vec2::ZERO);
+        // Points picked on a part surface are drawn by gizmos, not by the floor shader.
+        let on_floor = measure.all_on_floor();
+        let p0 = measure
+            .points
+            .first()
+            .copied()
+            .filter(|_| on_floor)
+            .unwrap_or(Vec2::ZERO);
+        let p1 = measure
+            .points
+            .get(1)
+            .copied()
+            .filter(|_| on_floor)
+            .unwrap_or(Vec2::ZERO);
         Self {
             spacing: Vec4::new(minor, major, bold, 1.0),
             ink: Vec4::new(ink[0], ink[1], ink[2], opacity.clamp(0.0, 1.0)),
@@ -104,7 +117,16 @@ impl GridParams {
                 if cursor.is_some() { 1.0 } else { 0.0 },
             ),
             measure: Vec4::new(p0.x, p0.y, p1.x, p1.y),
-            measure_count: Vec4::new(measure.points.len() as f32, 0.0, 0.0, 0.0),
+            measure_count: Vec4::new(
+                if on_floor {
+                    measure.points.len() as f32
+                } else {
+                    0.0
+                },
+                0.0,
+                0.0,
+                0.0,
+            ),
         }
     }
 }
@@ -135,22 +157,46 @@ pub struct GridFloor;
 /// Points picked with the measure tool, in AXL metres.
 #[derive(Resource, Default, Debug, Clone, PartialEq)]
 pub struct Measure {
-    /// Zero, one or two points.
+    /// Zero, one or two points (x, y).
     pub points: Vec<Vec2>,
+    /// Height of each point above the floor, metres (0 for floor points, more for points picked
+    /// on a part's surface in the builder). Same length as `points`.
+    pub heights: Vec<f32>,
 }
 
 impl Measure {
-    /// Add a point; a third click starts a new measurement.
+    /// Add a floor point; a third click starts a new measurement.
     pub fn click(&mut self, p: Vec2) {
+        self.click3(p.extend(0.0));
+    }
+
+    /// Add a point anywhere in 3D (a part surface or the floor).
+    pub fn click3(&mut self, p: Vec3) {
         if self.points.len() >= 2 {
             self.points.clear();
+            self.heights.clear();
         }
-        self.points.push(p);
+        self.points.push(Vec2::new(p.x, p.y));
+        self.heights.push(p.z);
+    }
+
+    /// The picked points in 3D.
+    pub fn points3(&self) -> Vec<Vec3> {
+        self.points
+            .iter()
+            .zip(self.heights.iter().chain(std::iter::repeat(&0.0)))
+            .map(|(p, z)| p.extend(*z))
+            .collect()
+    }
+
+    /// True when every picked point lies on the floor (the shader can draw them).
+    pub fn all_on_floor(&self) -> bool {
+        self.heights.iter().all(|z| z.abs() < 1e-5)
     }
 
     /// Distance between the two points in millimetres, once both are set.
     pub fn distance_mm(&self) -> Option<f32> {
-        match self.points.as_slice() {
+        match self.points3().as_slice() {
             [a, b] => Some(a.distance(*b) * 1000.0),
             _ => None,
         }
@@ -161,6 +207,11 @@ impl Measure {
         self.distance_mm().map(|mm| mm / 8.0)
     }
 }
+
+/// Present when a screen picks points on part surfaces itself (the builder), so the floor-only
+/// measure clicks stand down.
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct SurfacePicking;
 
 /// The point on the floor (z = 0) under the mouse cursor, in AXL metres.
 #[derive(Resource, Default, Debug, Clone, Copy)]
@@ -291,7 +342,7 @@ pub fn spawn_plain_floor(
     floor
 }
 
-fn track_cursor(
+pub(crate) fn track_cursor(
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform), With<crate::camera_rig::ViewCamera>>,
     root: Query<&GlobalTransform, With<AxlRoot>>,
@@ -325,16 +376,22 @@ fn measure_clicks(
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
     cursor: Res<CursorOnFloor>,
+    surface_picking: Option<Res<SurfacePicking>>,
     mut measure: ResMut<Measure>,
 ) {
     if !settings.measure_active {
         if !measure.points.is_empty() {
             measure.points.clear();
+            measure.heights.clear();
         }
         return;
     }
     // Alt + left-drag orbits the camera, so Alt-clicks never place points.
     if keys.pressed(KeyCode::AltLeft) || keys.pressed(KeyCode::AltRight) {
+        return;
+    }
+    // The builder picks measuring points on part surfaces itself.
+    if surface_picking.is_some() {
         return;
     }
     if mouse.just_pressed(MouseButton::Left)

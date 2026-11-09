@@ -15,7 +15,7 @@ use axl_render::{BenchmarkFinished, RenderOptions, StageContent, StagePlugin};
 use bevy_egui::input::EguiWantsInput;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 
-use crate::browser_ui::browser_panel;
+use crate::browser_ui::{LeftInset, TopInset, browser_panel};
 use crate::cli::Args;
 use crate::settings::Settings;
 
@@ -98,6 +98,7 @@ pub fn run(args: &Args) -> AppExit {
         quality,
         content: match args.stress_boxes {
             Some(n) => StageContent::Stress(n),
+            None if args.builder => StageContent::Builder,
             None => match &args.parts {
                 Some(q) => StageContent::Parts(axl_render::browser::BrowserState {
                     query: q.clone(),
@@ -132,7 +133,8 @@ pub fn run(args: &Args) -> AppExit {
         .and_then(|s| s.split_once('x'))
         .and_then(|(w, h)| Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?)))
         .filter(|(w, h)| *w >= 320 && *h >= 240);
-    let big_window = args.lookdev || args.stress_boxes.is_some() || args.parts.is_some();
+    let big_window =
+        args.lookdev || args.stress_boxes.is_some() || args.parts.is_some() || args.builder;
     let mut app = App::new();
     // Ask for the high-performance (discrete) adapter on hybrid-graphics laptops. WGPU_POWER_PREF
     // and WGPU_BACKEND in the environment still override this, so the owner can test other adapters.
@@ -184,6 +186,9 @@ pub fn run(args: &Args) -> AppExit {
         invert_orbit: current.invert_orbit,
     })
     .insert_resource(SettingsStore { current, path })
+    .init_resource::<LeftInset>()
+    .init_resource::<TopInset>()
+    .init_resource::<crate::builder_ui::BuilderUi>()
     .add_plugins(StagePlugin(options))
     .add_systems(
         Update,
@@ -194,13 +199,24 @@ pub fn run(args: &Args) -> AppExit {
             remember_benchmark,
         ),
     )
-    .add_systems(
-        EguiPrimaryContextPass,
-        (control_bar, status_bar, gizmo_overlay).chain(),
-    )
+    .add_systems(EguiPrimaryContextPass, (control_bar, status_bar).chain())
     .add_systems(
         EguiPrimaryContextPass,
         browser_panel.run_if(resource_exists::<axl_render::browser::BrowserState>),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        crate::builder_ui::builder_panels
+            .run_if(resource_exists::<axl_render::builder_view::BuilderRes>),
+    )
+    .add_systems(Update, crate::builder_ui::autosave)
+    // The gizmo sits in what the panels leave free, so it never covers one.
+    .add_systems(
+        EguiPrimaryContextPass,
+        gizmo_overlay
+            .after(control_bar)
+            .after(status_bar)
+            .after(browser_panel),
     );
     app.run()
 }
@@ -270,10 +286,11 @@ fn control_bar(
     measure: Res<Measure>,
     home: Res<CameraHome>,
     mut cams: Query<&mut Transform, With<ViewCamera>>,
+    mut top: ResMut<TopInset>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let mut root = viewport_ui(ctx);
-    egui::Panel::top("controls").show(&mut root, |ui| {
+    let bar = egui::Panel::top("controls").show(&mut root, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label("Quality");
             let before = quality.0;
@@ -353,6 +370,7 @@ fn control_bar(
             }
         });
     });
+    top.0 = bar.response.rect.bottom() - ctx.viewport_rect().top();
     Ok(())
 }
 
@@ -401,13 +419,15 @@ fn status_bar(
 fn gizmo_overlay(
     mut contexts: EguiContexts,
     cams: Query<&GlobalTransform, With<ViewCamera>>,
+    inset: Res<LeftInset>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let Ok(cam) = cams.single() else {
         return Ok(());
     };
+    // Stay clear of the left side panel (part browser, builder palette) and the status bar.
     let view = ctx.viewport_rect();
-    let origin = egui::pos2(view.left() + 64.0, view.bottom() - 64.0 - 28.0);
+    let origin = egui::pos2(view.left() + inset.0 + 64.0, view.bottom() - 64.0 - 28.0);
     let len = 40.0;
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,

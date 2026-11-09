@@ -36,6 +36,10 @@ pub struct Args {
     #[arg(long, value_name = "N", conflicts_with_all = ["headless", "lookdev"])]
     pub stress_boxes: Option<usize>,
 
+    /// Open the Builder screen.
+    #[arg(long, conflicts_with_all = ["headless", "lookdev", "stress_boxes", "parts"])]
+    pub builder: bool,
+
     /// Open the part browser. Takes a filter (id, name, category or `all`).
     #[arg(long, value_name = "FILTER", conflicts_with_all = ["headless", "lookdev", "stress_boxes"])]
     pub parts: Option<String>,

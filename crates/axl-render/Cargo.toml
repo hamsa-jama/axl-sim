@@ -14,4 +14,5 @@ serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 thiserror = "2"
 axl-parts = { path = "../axl-parts" }
+axl-build = { path = "../axl-build" }
 tracing = "0.1"
