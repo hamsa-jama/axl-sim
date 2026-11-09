@@ -486,8 +486,8 @@ pub fn apply_quality(
         // Radius is in view-space metres; parts are centimetres across.
         e.insert(ScreenSpaceAmbientOcclusion {
             quality_level: level,
-            radius: 0.022,
-            constant_object_thickness: 0.01,
+            radius: 0.012,
+            constant_object_thickness: 0.004,
         });
     }
     e.insert(if q.shadows.soft && q.aa == AaMode::Taa {
