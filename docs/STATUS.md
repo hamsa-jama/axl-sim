@@ -23,6 +23,7 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | Id | Milestone | Check | Steps |
 | --- | --- | --- | --- |
 | O1 | M0 | CI is green on Ubuntu, Windows and macOS | Open the Actions tab of `hamsa-jama/axl-sim`, find the latest run of `ci` on `main`, and confirm all three `check` jobs and the `wasm32-wasip1 target` job are green. The Windows (`tar.exe` unzip) and macOS (`hdiutil` mount) paths of `fetch-mujoco` have never run outside CI. |
+| O3 | M1 | Push the `m01-done` tag (sandbox push refused) | `git fetch origin && git tag -a m01-done -m "M1 physics core accepted" c8f2a82 && git push origin m01-done`. |
 | O0 | M0 | Push the `m00-done` tag | Done by the owner (tag points at 80b4537). |
 | O2 | M0 | The window opens on a real GPU | On a desktop machine: `cargo xtask fetch-mujoco && cargo run -p axl-app --release`. A dark window titled "AXL" with a status bar reading "AXL 0.1.0" should open and close normally. |
 
