@@ -159,7 +159,7 @@ pub fn spawn_view_camera(
     home: &CameraHome,
     quality: QualityPreset,
 ) -> Entity {
-    let env = images.add(crate::lighting::studio_cubemap(256));
+    let env = images.add(crate::hdri::load_studio_cubemap(256));
     let exposure = Exposure {
         ev100: lighting.camera.ev100(),
     };
@@ -427,9 +427,9 @@ pub fn apply_quality(
     if q.contact_shadows {
         // Distances are in metres; the defaults (30 cm rays) are far too long for small parts.
         e.insert(ContactShadows {
-            linear_steps: 16,
-            thickness: 0.004,
-            length: 0.03,
+            linear_steps: 24,
+            thickness: 0.005,
+            length: 0.04,
         });
     }
     if q.ao != AoLevel::Off {
@@ -441,8 +441,8 @@ pub fn apply_quality(
         // Radius is in view-space metres; parts are centimetres across.
         e.insert(ScreenSpaceAmbientOcclusion {
             quality_level: level,
-            radius: 0.012,
-            constant_object_thickness: 0.006,
+            radius: 0.022,
+            constant_object_thickness: 0.01,
         });
     }
     e.insert(if q.shadows.soft && q.aa == AaMode::Taa {

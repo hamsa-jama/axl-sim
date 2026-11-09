@@ -10,7 +10,7 @@
         elevation_deg: 50.0,
         // Compass angle of the light around the vertical axis (AXL +X is 0).
         azimuth_deg: -50.0,
-        illuminance_lux: 9000.0,
+        illuminance_lux: 11000.0,
         color_srgb: (1.0, 0.97, 0.92),
         // Shadow cascades reach this far from the camera (metres) and the first
         // cascade ends at the second value. Parts are small, so these are tight.
@@ -19,13 +19,13 @@
     ),
     environment: (
         // Scale from the relative radiance of the generated studio cubemap to cd/m2.
-        intensity: 800.0,
+        intensity: 130.0,
         backdrop_srgb: (0.80, 0.81, 0.82),
     ),
     camera: (
         // Physical exposure: EV100 = log2(N^2 * 100 / (t * ISO)).
         aperture_f: 4.0,
-        shutter_s: 0.0067,
+        shutter_s: 0.0045,
         iso: 100.0,
         fov_deg: 35.0,
         near_m: 0.005,

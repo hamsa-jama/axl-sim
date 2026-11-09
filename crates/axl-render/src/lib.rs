@@ -16,6 +16,7 @@ pub mod camera_rig;
 pub mod frames;
 pub mod grid;
 pub mod grid_math;
+pub mod hdri;
 pub mod lighting;
 pub mod materials_data;
 pub mod parts;
