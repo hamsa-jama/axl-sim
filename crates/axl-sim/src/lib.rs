@@ -18,8 +18,7 @@ use triple_buffer::{Input, Output, triple_buffer};
 /// Simulated seconds between published snapshots (250 Hz cap).
 pub const SNAPSHOT_INTERVAL_S: f64 = 0.004;
 /// The message shown when the simulation blows up (SPEC, "The step loop").
-pub const UNSTABLE_MESSAGE: &str =
-    "The simulation became unstable. This usually means a part is very light or a joint is overloaded.";
+pub const UNSTABLE_MESSAGE: &str = "The simulation became unstable. This usually means a part is very light or a joint is overloaded.";
 
 /// Why the sim could not start.
 #[derive(Debug, thiserror::Error)]

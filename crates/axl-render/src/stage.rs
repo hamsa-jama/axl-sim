@@ -29,6 +29,8 @@ pub enum StageContent {
     Parts(crate::browser::BrowserState),
     /// The Builder screen: an empty robot to build on the grid floor.
     Builder,
+    /// A compiled robot driven by snapshots (insert a [`crate::sim_view::SandboxScene`]).
+    Sandbox,
 }
 
 /// Everything the render plugin needs at start-up.
@@ -164,6 +166,7 @@ impl Plugin for StagePlugin {
             StageContent::Builder => {
                 app.add_plugins(crate::builder_view::BuilderPlugin);
             }
+            StageContent::Sandbox => {}
             StageContent::Stress(n) => {
                 app.insert_resource(StressBoxes(*n));
                 app.add_systems(Update, stress_source);
@@ -215,6 +218,7 @@ fn setup_stage(
     disable: Res<crate::diagnostics::DisableSet>,
     scene: Option<Res<SceneDef>>,
     stress: Option<Res<StressBoxes>>,
+    sandbox: Option<Res<crate::sim_view::SandboxScene>>,
     start_pose: Res<StartPose>,
 ) {
     let root = spawn_root(&mut commands);
@@ -245,6 +249,9 @@ fn setup_stage(
         if let Some(scene) = scene {
             home = scene.home();
             focus = spawn_scene(&mut commands, root, &scene, &mut builder);
+        }
+        if let Some(sb) = sandbox {
+            home = crate::sim_view::spawn_sandbox(&mut commands, root, &sb, &mut builder);
         }
         if let Some(stress) = stress {
             home = CameraHome {

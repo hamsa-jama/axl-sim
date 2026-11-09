@@ -25,6 +25,7 @@ pub mod parts;
 pub mod placeholder;
 pub mod quality;
 pub mod scene;
+pub mod sim_view;
 pub mod stage;
 pub mod sync;
 

@@ -36,6 +36,14 @@ pub struct Args {
     #[arg(long, value_name = "N", conflicts_with_all = ["headless", "lookdev"])]
     pub stress_boxes: Option<usize>,
 
+    /// Drive a starter robot (`rover` or `test_chassis`) on the sim thread with fixed voltages.
+    #[arg(long, value_name = "STARTER", conflicts_with_all = ["headless", "lookdev", "stress_boxes", "parts", "builder"])]
+    pub sandbox: Option<String>,
+
+    /// With --sandbox: motor voltages, for example `left=4,right=4`.
+    #[arg(long, value_name = "LIST", requires = "sandbox")]
+    pub volts: Option<String>,
+
     /// Open the Builder screen.
     #[arg(long, conflicts_with_all = ["headless", "lookdev", "stress_boxes", "parts"])]
     pub builder: bool,

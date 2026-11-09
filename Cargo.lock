@@ -417,7 +417,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axl-build",
+ "axl-compile",
+ "axl-parts",
  "axl-render",
+ "axl-sim",
  "bevy",
  "bevy_egui",
  "clap",
@@ -489,6 +492,7 @@ name = "axl-render"
 version = "0.1.0"
 dependencies = [
  "axl-build",
+ "axl-compile",
  "axl-parts",
  "bevy",
  "ron",

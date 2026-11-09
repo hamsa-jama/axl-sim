@@ -57,7 +57,7 @@ pub struct GhostPart;
 #[derive(Resource, Default)]
 pub struct BuilderEntities(pub BTreeMap<u32, Entity>);
 
-fn mat3(o: Orient) -> Mat3 {
+pub(crate) fn mat3(o: Orient) -> Mat3 {
     let m = o.matrix();
     Mat3::from_cols(
         Vec3::new(m[0][0] as f32, m[1][0] as f32, m[2][0] as f32),

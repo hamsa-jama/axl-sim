@@ -116,6 +116,22 @@ impl ShapeBuilder<'_> {
         uid: u32,
         tf: Transform,
     ) -> Option<Entity> {
+        self.spawn_part_slots(commands, parent, part_id, color, uid, tf, None)
+    }
+
+    /// Like [`Self::spawn_part`], but with only the meshes of sub-body `only_body` (a motor's
+    /// housing is 0, its rotor 1), so the two can follow different simulated bodies.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_part_slots(
+        &mut self,
+        commands: &mut Commands,
+        parent: Entity,
+        part_id: &str,
+        color: &str,
+        uid: u32,
+        tf: Transform,
+        only_body: Option<usize>,
+    ) -> Option<Entity> {
         let default_color = self
             .lib
             .catalog()
@@ -129,7 +145,10 @@ impl ShapeBuilder<'_> {
             .spawn((Name::new(part_id.to_string()), tf, Visibility::default()))
             .id();
         commands.entity(parent).add_child(entity);
-        for (_, surface, mesh) in &cached.slots {
+        for (body, surface, mesh) in &cached.slots {
+            if only_body.is_some_and(|b| b != *body) {
+                continue;
+            }
             let (kind, rgb) = match surface {
                 Surface::Body => (MaterialKind::Abs, rgb),
                 Surface::Dark => (MaterialKind::Abs, [0x1B, 0x2A, 0x34]),

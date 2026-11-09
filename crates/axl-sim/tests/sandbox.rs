@@ -6,7 +6,13 @@ use axl_sim::{Command, Sandbox, run_headless};
 fn rover() -> axl_compile::Compiled {
     let cat = Catalog::builtin();
     let asm = build_starter(&cat, "rover").unwrap();
-    compile(&cat, &asm, &PhysicsParams::builtin(), &CompileOptions::default()).unwrap()
+    compile(
+        &cat,
+        &asm,
+        &PhysicsParams::builtin(),
+        &CompileOptions::default(),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -15,7 +21,13 @@ fn fixed_voltages_drive_the_rover_forward() {
     let v = [("left".to_string(), 4.0), ("right".to_string(), 4.0)];
     let s = run_headless(&c, &v, 2.0).unwrap();
     assert!((s.time - 2.0).abs() < 0.002);
-    let root = c.bodies.bodies.iter().find(|b| b.name == "root").unwrap().id;
+    let root = c
+        .bodies
+        .bodies
+        .iter()
+        .find(|b| b.name == "root")
+        .unwrap()
+        .id;
     assert!(s.bodies[root].pos[0] > 0.3, "{:?}", s.bodies[root].pos);
     assert!(s.error.is_none());
 }
@@ -23,7 +35,9 @@ fn fixed_voltages_drive_the_rover_forward() {
 #[test]
 fn an_unknown_motor_is_refused() {
     let c = rover();
-    let e = run_headless(&c, &[("nope".into(), 1.0)], 0.1).err().unwrap();
+    let e = run_headless(&c, &[("nope".into(), 1.0)], 0.1)
+        .err()
+        .unwrap();
     assert_eq!(e.to_string(), "There is no motor called nope.");
 }
 
@@ -32,7 +46,13 @@ fn the_sim_thread_publishes_snapshots_and_obeys_commands() {
     let c = rover();
     let mut sb = Sandbox::spawn(&c, &[("left".into(), 4.0), ("right".into(), 4.0)]).unwrap();
     sb.send(Command::SetSpeed(4.0));
-    let root = c.bodies.bodies.iter().find(|b| b.name == "root").unwrap().id;
+    let root = c
+        .bodies
+        .bodies
+        .iter()
+        .find(|b| b.name == "root")
+        .unwrap()
+        .id;
     let start = std::time::Instant::now();
     let mut x = 0.0;
     while start.elapsed().as_secs_f64() < 5.0 {
