@@ -55,7 +55,11 @@ pub fn gear_outline(teeth: u32) -> Vec<P2> {
     let half_root = psi + inv_p;
     let flank = |r: f64| -> f64 {
         // Polar angle of the left flank (positive side) at radius r.
-        if r <= rb { half_root } else { half_root - inv((rb / r).acos()) }
+        if r <= rb {
+            half_root
+        } else {
+            half_root - inv((rb / r).acos())
+        }
     };
     let mut radii = vec![rf];
     if rb > rf {
@@ -112,13 +116,20 @@ pub fn gear_mesh(teeth: u32, thickness: f64) -> TriMesh {
 pub fn gear_volume(teeth: u32, thickness: f64) -> f64 {
     let o = gear_outline(teeth);
     let area = signed_area(&o).abs() - axle_area();
-    area * thickness - 2.0 * bevel_loss(perimeter(&o) + perimeter(&axle_profile()), gear_bevel(teeth))
+    area * thickness
+        - 2.0
+            * bevel_loss(
+                perimeter(&o) + perimeter(&axle_profile()),
+                gear_bevel(teeth),
+            )
 }
 
 // ---------------------------------------------------------------- beams
 
 fn holes_at(pts: &[(f64, f64)]) -> Vec<Vec<P2>> {
-    pts.iter().map(|&(x, y)| circle(x, y, HOLE_D / 2.0, SEG)).collect()
+    pts.iter()
+        .map(|&(x, y)| circle(x, y, HOLE_D / 2.0, SEG))
+        .collect()
 }
 
 /// Hole centres of a beam, in the beam's XY outline plane (X along the length).
@@ -175,8 +186,18 @@ fn beam_outline(shape: BeamShape) -> (Vec<P2>, Vec<Vec<P2>>) {
         }
         BeamShape::Frame { w, h } => {
             let (lx, ly) = ((w - 1) as f64 * UNIT, (h - 1) as f64 * UNIT);
-            let outer = fillet(&rect(lx / 2.0, ly / 2.0, lx + BEAM_W, ly + BEAM_W), r, 20.0, 12);
-            let inner = fillet(&rect(lx / 2.0, ly / 2.0, lx - BEAM_W, ly - BEAM_W), 1.0, 20.0, 4);
+            let outer = fillet(
+                &rect(lx / 2.0, ly / 2.0, lx + BEAM_W, ly + BEAM_W),
+                r,
+                20.0,
+                12,
+            );
+            let inner = fillet(
+                &rect(lx / 2.0, ly / 2.0, lx - BEAM_W, ly - BEAM_W),
+                1.0,
+                20.0,
+                4,
+            );
             (outer, vec![inner])
         }
     }
@@ -202,7 +223,9 @@ pub fn beam_volume(shape: BeamShape) -> f64 {
     let hole_a = PI * (HOLE_D / 2.0).powi(2);
     let n_holes = beam_hole_centres(shape).len() as f64;
     let area = match shape {
-        BeamShape::Straight { holes } => (holes - 1) as f64 * UNIT * BEAM_W + PI * r * r - n_holes * hole_a,
+        BeamShape::Straight { holes } => {
+            (holes - 1) as f64 * UNIT * BEAM_W + PI * r * r - n_holes * hole_a
+        }
         BeamShape::L { long, short } => {
             let (x, y) = ((long - 1) as f64 * UNIT, (short - 1) as f64 * UNIT);
             // Two arms, minus their overlap, plus two end half-discs and the rounded outer corner;
@@ -217,9 +240,8 @@ pub fn beam_volume(shape: BeamShape) -> f64 {
         }
     };
     let (o, extra) = beam_outline(shape);
-    let per = perimeter(&o)
-        + extra.iter().map(|l| perimeter(l)).sum::<f64>()
-        + n_holes * PI * HOLE_D;
+    let per =
+        perimeter(&o) + extra.iter().map(|l| perimeter(l)).sum::<f64>() + n_holes * PI * HOLE_D;
     area * BEAM_W - 2.0 * bevel_loss(per, BEAM_BEVEL)
 }
 
@@ -230,7 +252,13 @@ pub fn beam_volume(shape: BeamShape) -> f64 {
 pub fn axle_mesh(units: u32) -> TriMesh {
     let p = Profile::solid(axle_profile());
     let b = Cap::all(PART_BEVEL);
-    let mut m = extrude(&p, -UNIT / 2.0, UNIT * units as f64 - UNIT / 2.0, Some(b), Some(b));
+    let mut m = extrude(
+        &p,
+        -UNIT / 2.0,
+        UNIT * units as f64 - UNIT / 2.0,
+        Some(b),
+        Some(b),
+    );
     // Extrusion Z becomes X (x = z).
     m.transform(&Xf::rot_y(90.0));
     m
@@ -329,17 +357,40 @@ pub fn wheel_meshes(diameter: f64, width: f64) -> (TriMesh, TriMesh) {
     }
     let tread = fillet(&tread, 0.3, 30.0, 2);
     let tp = Profile::solid(tread).with_hole(circle(0.0, 0.0, r_in, 96));
-    let mut tyre = extrude(&tp, -width / 2.0, width / 2.0, Some(Cap { outer: 0.6, holes: 0.2 }), Some(Cap { outer: 0.6, holes: 0.2 }));
+    let mut tyre = extrude(
+        &tp,
+        -width / 2.0,
+        width / 2.0,
+        Some(Cap {
+            outer: 0.6,
+            holes: 0.2,
+        }),
+        Some(Cap {
+            outer: 0.6,
+            holes: 0.2,
+        }),
+    );
     tyre.transform(&Xf::IDENTITY);
     // Rim: ring, web with lightening holes, hub boss.
     let b = Cap::all(PART_BEVEL * 2.0);
     let ring_w = width - 1.0;
-    let ring = Profile::solid(circle(0.0, 0.0, r_in + 0.2, 96)).with_hole(circle(0.0, 0.0, r_in - 2.0, 96));
+    let ring = Profile::solid(circle(0.0, 0.0, r_in + 0.2, 96)).with_hole(circle(
+        0.0,
+        0.0,
+        r_in - 2.0,
+        96,
+    ));
     let mut rim = extrude(&ring, -ring_w / 2.0, ring_w / 2.0, Some(b), Some(b));
     let boss_r = (r * 0.26).clamp(4.2, 6.5);
     let mut web = Profile::solid(circle(0.0, 0.0, r_in - 1.8, 96)).with_hole(axle_profile());
     if r > 20.0 {
-        let holes = if r < 25.0 { 4 } else if r < 32.0 { 5 } else { 6 };
+        let holes = if r < 25.0 {
+            4
+        } else if r < 32.0 {
+            5
+        } else {
+            6
+        };
         let hr = (r_in - 2.0 - boss_r) * 0.32;
         let at = boss_r + (r_in - 2.0 - boss_r) * 0.5;
         for k in 0..holes {
@@ -349,7 +400,13 @@ pub fn wheel_meshes(diameter: f64, width: f64) -> (TriMesh, TriMesh) {
     }
     rim.append(&extrude(&web, -1.0, 1.0, Some(b), Some(b)));
     let boss = Profile::solid(circle(0.0, 0.0, boss_r, 48)).with_hole(axle_profile());
-    rim.append(&extrude(&boss, -ring_w / 2.0 - 0.6, ring_w / 2.0 + 0.6, Some(b), Some(b)));
+    rim.append(&extrude(
+        &boss,
+        -ring_w / 2.0 - 0.6,
+        ring_w / 2.0 + 0.6,
+        Some(b),
+        Some(b),
+    ));
     (rim, tyre)
 }
 
@@ -357,7 +414,15 @@ pub fn wheel_meshes(diameter: f64, width: f64) -> (TriMesh, TriMesh) {
 /// Returns (housing, ball). Housing bottom is at z = ball radius.
 pub fn caster_meshes(ball_d: f64) -> (TriMesh, TriMesh) {
     let r = ball_d / 2.0;
-    let spec = BlockSpec { nx: 2, ny: 2, height: 12.8, studs: true, cavity: false, holes_y: vec![], bevel: PART_BEVEL };
+    let spec = BlockSpec {
+        nx: 2,
+        ny: 2,
+        height: 12.8,
+        studs: true,
+        cavity: false,
+        holes_y: vec![],
+        bevel: PART_BEVEL,
+    };
     let mut housing = block_mesh(&spec);
     housing.transform(&Xf::translate(0.0, 0.0, r));
     let prof: Vec<Lp> = arc(lp(0.0, r), r, -90.0, 90.0, 24);
@@ -381,8 +446,14 @@ mod tests {
             let o = gear_outline(n);
             let rmax = o.iter().map(|p| p[0].hypot(p[1])).fold(0.0, f64::max);
             let rmin = o.iter().map(|p| p[0].hypot(p[1])).fold(f64::MAX, f64::min);
-            assert!((rmax - (n as f64 / 2.0 + 1.0)).abs() < 1e-9, "tip radius {n}");
-            assert!((rmin - (n as f64 / 2.0 - 1.25)).abs() < 1e-9, "root radius {n}");
+            assert!(
+                (rmax - (n as f64 / 2.0 + 1.0)).abs() < 1e-9,
+                "tip radius {n}"
+            );
+            assert!(
+                (rmin - (n as f64 / 2.0 - 1.25)).abs() < 1e-9,
+                "root radius {n}"
+            );
             assert!(signed_area(&o) > 0.0);
         }
     }
@@ -393,7 +464,11 @@ mod tests {
             let m = gear_mesh(n, 3.2);
             assert!(m.is_closed(), "gear {n}");
             let a = gear_volume(n, 3.2);
-            assert!(within(m.volume(), a, 0.01), "gear {n}: mesh {} analytic {a}", m.volume());
+            assert!(
+                within(m.volume(), a, 0.01),
+                "gear {n}: mesh {} analytic {a}",
+                m.volume()
+            );
         }
     }
 
@@ -408,7 +483,11 @@ mod tests {
             let m = beam_mesh(s);
             assert!(m.is_closed(), "{s:?}");
             let a = beam_volume(s);
-            assert!(within(m.volume(), a, 0.01), "{s:?}: mesh {} analytic {a}", m.volume());
+            assert!(
+                within(m.volume(), a, 0.01),
+                "{s:?}: mesh {} analytic {a}",
+                m.volume()
+            );
         }
     }
 
@@ -430,10 +509,20 @@ mod tests {
             let (lo, hi) = m.bounds();
             assert!((lo[0] + 4.0).abs() < 1e-6 && (hi[0] - (8.0 * u as f64 - 4.0)).abs() < 1e-6);
         }
-        for (u, k) in [(2, PinKind::Friction), (2, PinKind::Smooth), (3, PinKind::Friction), (2, PinKind::AxlePin)] {
+        for (u, k) in [
+            (2, PinKind::Friction),
+            (2, PinKind::Smooth),
+            (3, PinKind::Friction),
+            (2, PinKind::AxlePin),
+        ] {
             let m = pin_mesh(u, k);
             assert!(m.is_closed(), "{k:?}");
-            assert!(within(m.volume(), pin_volume(u, k), 0.02), "{k:?}: {} vs {}", m.volume(), pin_volume(u, k));
+            assert!(
+                within(m.volume(), pin_volume(u, k), 0.02),
+                "{k:?}: {} vs {}",
+                m.volume(),
+                pin_volume(u, k)
+            );
         }
     }
 

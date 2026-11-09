@@ -71,7 +71,10 @@ impl BlockSpec {
         if nx >= 2 && ny >= 2 {
             for i in 1..nx {
                 for j in 1..ny {
-                    v.push(((i as f64 - nx as f64 / 2.0) * PITCH, (j as f64 - ny as f64 / 2.0) * PITCH));
+                    v.push((
+                        (i as f64 - nx as f64 / 2.0) * PITCH,
+                        (j as f64 - ny as f64 / 2.0) * PITCH,
+                    ));
                 }
             }
         }
@@ -147,7 +150,13 @@ fn breaks(h: f64, b: f64) -> Vec<f64> {
     v
 }
 
-fn flat_with_holes(m: &mut TriMesh, rect: [[f64; 2]; 2], holes: &[(f64, f64, f64)], map: &dyn Fn(f64, f64) -> V3, normal: V3) {
+fn flat_with_holes(
+    m: &mut TriMesh,
+    rect: [[f64; 2]; 2],
+    holes: &[(f64, f64, f64)],
+    map: &dyn Fn(f64, f64) -> V3,
+    normal: V3,
+) {
     let [[x0, x1], [y0, y1]] = rect;
     let mut data = vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
     let mut starts = Vec::new();
@@ -156,7 +165,10 @@ fn flat_with_holes(m: &mut TriMesh, rect: [[f64; 2]; 2], holes: &[(f64, f64, f64
         data.extend(circle(cx, cy, r, SEGS));
     }
     let tris = crate::earcut::triangulate(&data, &starts);
-    let base: Vec<u32> = data.iter().map(|p| m.vert(map(p[0], p[1]), normal)).collect();
+    let base: Vec<u32> = data
+        .iter()
+        .map(|p| m.vert(map(p[0], p[1]), normal))
+        .collect();
     for t in tris.chunks(3) {
         m.tri_facing(base[t[0]], base[t[1]], base[t[2]], normal);
     }
@@ -209,10 +221,14 @@ fn shell(h: V3, b: f64, cavity: Option<(f64, f64, f64)>, holes_y: &[(f64, f64, f
             let fj: Vec<usize> = (K..=flat_hi).collect();
             let bevels: Vec<usize> = (0..K).chain(flat_hi..flat_hi + K).collect();
             let strip = |m: &mut TriMesh, l: &[u32], r: &[u32]| {
-                let want = l.iter().chain(r).fold([0.0; 3], |s, &i| v3::add(s, m.nor[i as usize]));
+                let want = l
+                    .iter()
+                    .chain(r)
+                    .fold([0.0; 3], |s, &i| v3::add(s, m.nor[i as usize]));
                 let (mut i, mut j) = (0, 0);
                 while i + 1 < l.len() || j + 1 < r.len() {
-                    let adv_left = j + 1 >= r.len() || (i + 1 < l.len() && (i + 1) * (r.len() - 1) <= (j + 1) * (l.len() - 1));
+                    let adv_left = j + 1 >= r.len()
+                        || (i + 1 < l.len() && (i + 1) * (r.len() - 1) <= (j + 1) * (l.len() - 1));
                     if adv_left {
                         m.tri_facing(l[i], r[j], l[i + 1], want);
                         i += 1;
@@ -245,7 +261,12 @@ fn shell(h: V3, b: f64, cavity: Option<(f64, f64, f64)>, holes_y: &[(f64, f64, f
                 strip(&mut m, &edge(j), &edge(j + 1));
             }
             let cell = |m: &mut TriMesh, (i0, i1): (usize, usize), (j0, j1): (usize, usize)| {
-                m.quad(grid[i0 * nv + j0], grid[i1 * nv + j0], grid[i1 * nv + j1], grid[i0 * nv + j1]);
+                m.quad(
+                    grid[i0 * nv + j0],
+                    grid[i1 * nv + j0],
+                    grid[i1 * nv + j1],
+                    grid[i0 * nv + j1],
+                );
             };
             for &i in &bevels {
                 for &j in &bevels {
@@ -290,12 +311,14 @@ fn shell(h: V3, b: f64, cavity: Option<(f64, f64, f64)>, holes_y: &[(f64, f64, f
     if let Some((cx, cy, ztop)) = cavity {
         let zb = -h[2];
         // Ceiling.
-        let c = [[-cx, -cy], [cx, -cy], [cx, cy], [-cx, cy]].map(|p| m.vert([p[0], p[1], ztop], [0.0, 0.0, -1.0]));
+        let c = [[-cx, -cy], [cx, -cy], [cx, cy], [-cx, cy]]
+            .map(|p| m.vert([p[0], p[1], ztop], [0.0, 0.0, -1.0]));
         m.quad(c[0], c[1], c[2], c[3]);
         // Inner walls, normals into the cavity. X walls are plain; Y walls may have holes.
         for s in [-1.0f64, 1.0] {
             let nx = [-s, 0.0, 0.0];
-            let q = [(-cy, zb), (cy, zb), (cy, ztop), (-cy, ztop)].map(|(y, z)| m.vert([s * cx, y, z], nx));
+            let q = [(-cy, zb), (cy, zb), (cy, ztop), (-cy, ztop)]
+                .map(|(y, z)| m.vert([s * cx, y, z], nx));
             m.quad(q[0], q[1], q[2], q[3]);
             let ny = [0.0, -s, 0.0];
             let mapf = |z: f64, x: f64| -> V3 { [x, s * cy, z] };
@@ -324,14 +347,25 @@ fn shell(h: V3, b: f64, cavity: Option<(f64, f64, f64)>, holes_y: &[(f64, f64, f
 pub fn block_mesh(spec: &BlockSpec) -> TriMesh {
     let (l, w, h) = (spec.len_x(), spec.len_y(), spec.height);
     let hz = h / 2.0;
-    let cav = spec.cavity.then(|| (l / 2.0 - WALL, w / 2.0 - WALL, hz - TOP_T));
-    let holes: Vec<(f64, f64, f64)> = spec.holes_y.iter().map(|&(x, z)| (x, z - hz, HOLE_D / 2.0)).collect();
+    let cav = spec
+        .cavity
+        .then(|| (l / 2.0 - WALL, w / 2.0 - WALL, hz - TOP_T));
+    let holes: Vec<(f64, f64, f64)> = spec
+        .holes_y
+        .iter()
+        .map(|&(x, z)| (x, z - hz, HOLE_D / 2.0))
+        .collect();
     let mut m = shell([l / 2.0, w / 2.0, hz], spec.bevel, cav, &holes);
     m.transform(&Xf::translate(0.0, 0.0, hz));
     if spec.cavity {
         let depth = h - TOP_T;
         for (x, y) in spec.tubes() {
-            let p = Profile::solid(circle(0.0, 0.0, TUBE_OD / 2.0, SEGS)).with_hole(circle(0.0, 0.0, STUD_D / 2.0, SEGS));
+            let p = Profile::solid(circle(0.0, 0.0, TUBE_OD / 2.0, SEGS)).with_hole(circle(
+                0.0,
+                0.0,
+                STUD_D / 2.0,
+                SEGS,
+            ));
             let mut t = extrude(&p, 0.0, depth, Some(Cap::SHARP), Some(Cap::SHARP));
             t.transform(&Xf::translate(x, y, 0.0));
             m.append(&t);
@@ -357,7 +391,15 @@ mod tests {
     use super::*;
 
     fn brick(nx: u32, ny: u32) -> BlockSpec {
-        BlockSpec { nx, ny, height: 9.6, studs: true, cavity: true, holes_y: vec![], bevel: 0.15 }
+        BlockSpec {
+            nx,
+            ny,
+            height: 9.6,
+            studs: true,
+            cavity: true,
+            holes_y: vec![],
+            bevel: 0.15,
+        }
     }
 
     #[test]
@@ -381,20 +423,35 @@ mod tests {
     #[test]
     fn plate_tile_and_1x1_work() {
         for s in [
-            BlockSpec { height: 3.2, ..brick(2, 4) },
-            BlockSpec { height: 3.2, studs: false, ..brick(2, 2) },
+            BlockSpec {
+                height: 3.2,
+                ..brick(2, 4)
+            },
+            BlockSpec {
+                height: 3.2,
+                studs: false,
+                ..brick(2, 2)
+            },
             brick(1, 1),
             brick(1, 6),
         ] {
             let m = block_mesh(&s);
             assert!(m.is_closed());
-            assert!((m.volume() - s.volume()).abs() / s.volume() < 0.012, "{}x{}", s.nx, s.ny);
+            assert!(
+                (m.volume() - s.volume()).abs() / s.volume() < 0.012,
+                "{}x{}",
+                s.nx,
+                s.ny
+            );
         }
     }
 
     #[test]
     fn hole_brick_has_bores_and_is_closed() {
-        let s = BlockSpec { holes_y: vec![(-8.0, 4.8), (0.0, 4.8), (8.0, 4.8)], ..brick(4, 1) };
+        let s = BlockSpec {
+            holes_y: vec![(-8.0, 4.8), (0.0, 4.8), (8.0, 4.8)],
+            ..brick(4, 1)
+        };
         let m = block_mesh(&s);
         assert!(m.is_closed());
         assert!((m.volume() - s.volume()).abs() / s.volume() < 0.012);

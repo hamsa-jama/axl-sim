@@ -41,7 +41,10 @@ pub fn perimeter(l: &[P2]) -> f64 {
 impl Profile {
     /// A profile with no holes.
     pub fn solid(outer: Vec<P2>) -> Self {
-        Self { outer, holes: vec![] }
+        Self {
+            outer,
+            holes: vec![],
+        }
     }
 
     /// Add a hole.
@@ -67,7 +70,8 @@ impl Profile {
 
     /// Polygon area (outer minus holes), mm2.
     pub fn area(&self) -> f64 {
-        signed_area(&self.outer).abs() - self.holes.iter().map(|h| signed_area(h).abs()).sum::<f64>()
+        signed_area(&self.outer).abs()
+            - self.holes.iter().map(|h| signed_area(h).abs()).sum::<f64>()
     }
 }
 
@@ -84,7 +88,12 @@ pub fn circle(cx: f64, cy: f64, r: f64, n: usize) -> Vec<P2> {
 /// A counter-clockwise rectangle.
 pub fn rect(cx: f64, cy: f64, w: f64, h: f64) -> Vec<P2> {
     let (x, y) = (w / 2.0, h / 2.0);
-    vec![[cx - x, cy - y], [cx + x, cy - y], [cx + x, cy + y], [cx - x, cy + y]]
+    vec![
+        [cx - x, cy - y],
+        [cx + x, cy - y],
+        [cx + x, cy + y],
+        [cx - x, cy + y],
+    ]
 }
 
 /// A stadium (rounded ends of radius `r`) whose end-circle centres are at (0,0) and (len,0).
@@ -105,8 +114,18 @@ pub fn stadium(len: f64, r: f64, seg: usize) -> Vec<P2> {
 pub fn plus(span: f64, arm: f64) -> Vec<P2> {
     let (s, a) = (span / 2.0, arm / 2.0);
     vec![
-        [a, -s], [a, -a], [s, -a], [s, a], [a, a], [a, s],
-        [-a, s], [-a, a], [-s, a], [-s, -a], [-a, -a], [-a, -s],
+        [a, -s],
+        [a, -a],
+        [s, -a],
+        [s, a],
+        [a, a],
+        [a, s],
+        [-a, s],
+        [-a, a],
+        [-s, a],
+        [-s, -a],
+        [-a, -a],
+        [-a, -s],
     ]
 }
 
@@ -165,7 +184,9 @@ mod tests {
     fn normalised_flips_orientation() {
         let mut o = rect(0.0, 0.0, 2.0, 2.0);
         o.reverse();
-        let p = Profile::solid(o).with_hole(circle(0.0, 0.0, 0.3, 8)).normalised();
+        let p = Profile::solid(o)
+            .with_hole(circle(0.0, 0.0, 0.3, 8))
+            .normalised();
         assert!(signed_area(&p.outer) > 0.0 && signed_area(&p.holes[0]) < 0.0);
     }
 
@@ -181,7 +202,14 @@ mod tests {
 
     #[test]
     fn fillet_handles_concave_corners() {
-        let l = [[0.0, 0.0], [10.0, 0.0], [10.0, 5.0], [5.0, 5.0], [5.0, 10.0], [0.0, 10.0]];
+        let l = [
+            [0.0, 0.0],
+            [10.0, 0.0],
+            [10.0, 5.0],
+            [5.0, 5.0],
+            [5.0, 10.0],
+            [0.0, 10.0],
+        ];
         let f = fillet(&l, 0.5, 20.0, 4);
         assert!(signed_area(&f) > 0.0);
         assert!(f.len() > l.len());
@@ -191,7 +219,10 @@ mod tests {
     fn stadium_length() {
         let s = stadium(32.0, 3.6, 12);
         let xs: Vec<f64> = s.iter().map(|p| p[0]).collect();
-        let (lo, hi) = (xs.iter().cloned().fold(f64::MAX, f64::min), xs.iter().cloned().fold(f64::MIN, f64::max));
+        let (lo, hi) = (
+            xs.iter().cloned().fold(f64::MAX, f64::min),
+            xs.iter().cloned().fold(f64::MIN, f64::max),
+        );
         assert!((hi - lo - 39.2).abs() < 1e-9);
     }
 }

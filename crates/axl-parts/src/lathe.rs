@@ -34,7 +34,10 @@ pub fn lathe(profile: &[Lp], creases: &[usize], segs: usize) -> TriMesh {
     // Outward normal of each segment (right-hand side of travel).
     let seg_n: Vec<(f64, f64)> = (0..m - 1)
         .map(|i| {
-            let (dr, dz) = (profile[i + 1].r - profile[i].r, profile[i + 1].z - profile[i].z);
+            let (dr, dz) = (
+                profile[i + 1].r - profile[i].r,
+                profile[i + 1].z - profile[i].z,
+            );
             let len = (dr * dr + dz * dz).sqrt().max(1e-12);
             (dz / len, -dr / len)
         })
@@ -66,9 +69,11 @@ pub fn lathe(profile: &[Lp], creases: &[usize], segs: usize) -> TriMesh {
             rb.push(mesh.vert([b.r * cp, b.r * sp, b.z], [nb.0 * cp, nb.0 * sp, nb.1]));
         }
         for k in 0..segs {
-            let n3 = [seg_n[s].0 * (std::f64::consts::TAU * (k as f64 + 0.5) / segs as f64).cos(),
-                      seg_n[s].0 * (std::f64::consts::TAU * (k as f64 + 0.5) / segs as f64).sin(),
-                      seg_n[s].1];
+            let n3 = [
+                seg_n[s].0 * (std::f64::consts::TAU * (k as f64 + 0.5) / segs as f64).cos(),
+                seg_n[s].0 * (std::f64::consts::TAU * (k as f64 + 0.5) / segs as f64).sin(),
+                seg_n[s].1,
+            ];
             if a.r < 1e-9 {
                 mesh.tri_facing(ra[k], rb[k], rb[k + 1], n3);
             } else if b.r < 1e-9 {

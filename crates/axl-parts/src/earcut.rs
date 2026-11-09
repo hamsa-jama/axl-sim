@@ -103,7 +103,13 @@ impl List {
         self.n[pr].next = nx;
     }
 
-    fn linked_list(&mut self, data: &[[f64; 2]], start: usize, end: usize, ccw: bool) -> Option<usize> {
+    fn linked_list(
+        &mut self,
+        data: &[[f64; 2]],
+        start: usize,
+        end: usize,
+        ccw: bool,
+    ) -> Option<usize> {
         let mut sum = 0.0;
         for i in start..end {
             let j = if i + 1 == end { start } else { i + 1 };
@@ -135,7 +141,8 @@ impl List {
             let mut again = false;
             let (pr, nx) = (self.n[p].prev, self.n[p].next);
             if !self.n[p].steiner
-                && (eq(self.nd(p), self.nd(nx)) || area(self.nd(pr), self.nd(p), self.nd(nx)) == 0.0)
+                && (eq(self.nd(p), self.nd(nx))
+                    || area(self.nd(pr), self.nd(p), self.nd(nx)) == 0.0)
             {
                 self.remove(p);
                 p = pr;
@@ -394,9 +401,30 @@ impl List {
                     ((qx, hy), (mx, my), (hx, hy))
                 };
                 let (a, b, c) = (
-                    N { i: 0, x: tri.0.0, y: tri.0.1, prev: 0, next: 0, steiner: false },
-                    N { i: 0, x: tri.1.0, y: tri.1.1, prev: 0, next: 0, steiner: false },
-                    N { i: 0, x: tri.2.0, y: tri.2.1, prev: 0, next: 0, steiner: false },
+                    N {
+                        i: 0,
+                        x: tri.0.0,
+                        y: tri.0.1,
+                        prev: 0,
+                        next: 0,
+                        steiner: false,
+                    },
+                    N {
+                        i: 0,
+                        x: tri.1.0,
+                        y: tri.1.1,
+                        prev: 0,
+                        next: 0,
+                        steiner: false,
+                    },
+                    N {
+                        i: 0,
+                        x: tri.2.0,
+                        y: tri.2.1,
+                        prev: 0,
+                        next: 0,
+                        steiner: false,
+                    },
                 );
                 if point_in_triangle(&a, &b, &c, (pn.x, pn.y)) {
                     let tn = (hy - pn.y).abs() / (hx - pn.x);
@@ -522,7 +550,14 @@ mod tests {
     #[test]
     fn concave_polygon_area_is_preserved() {
         // An L shape of area 3.
-        let d = [[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0], [1.0, 2.0], [0.0, 2.0]];
+        let d = [
+            [0.0, 0.0],
+            [2.0, 0.0],
+            [2.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 2.0],
+            [0.0, 2.0],
+        ];
         let t = triangulate(&d, &[]);
         assert!((tri_area(&d, &t) - 3.0).abs() < 1e-12);
     }
@@ -538,7 +573,11 @@ mod tests {
         let t = triangulate(&d, &starts);
         let hole_area: f64 = 7.0 * 0.5 * 32.0 * 2.4 * 2.4 * (std::f64::consts::TAU / 32.0).sin();
         let want = 63.6 * 7.2 - hole_area;
-        assert!((tri_area(&d, &t) - want).abs() < 1e-6, "{} vs {want}", tri_area(&d, &t));
+        assert!(
+            (tri_area(&d, &t) - want).abs() < 1e-6,
+            "{} vs {want}",
+            tri_area(&d, &t)
+        );
     }
 
     #[test]
@@ -547,8 +586,18 @@ mod tests {
         let start = d.len();
         // A plus shape, clockwise.
         let plus = [
-            [0.9, 2.4], [-0.9, 2.4], [-0.9, 0.9], [-2.4, 0.9], [-2.4, -0.9], [-0.9, -0.9],
-            [-0.9, -2.4], [0.9, -2.4], [0.9, -0.9], [2.4, -0.9], [2.4, 0.9], [0.9, 0.9],
+            [0.9, 2.4],
+            [-0.9, 2.4],
+            [-0.9, 0.9],
+            [-2.4, 0.9],
+            [-2.4, -0.9],
+            [-0.9, -0.9],
+            [-0.9, -2.4],
+            [0.9, -2.4],
+            [0.9, -0.9],
+            [2.4, -0.9],
+            [2.4, 0.9],
+            [0.9, 0.9],
         ];
         d.extend(plus);
         let t = triangulate(&d, &[start]);

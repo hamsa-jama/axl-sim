@@ -150,7 +150,11 @@ impl TriMesh {
 
     /// Add a triangle, flipping it if its winding disagrees with `want` (a direction it should face).
     pub fn tri_facing(&mut self, a: u32, b: u32, c: u32, want: V3) {
-        let (pa, pb, pc) = (self.pos[a as usize], self.pos[b as usize], self.pos[c as usize]);
+        let (pa, pb, pc) = (
+            self.pos[a as usize],
+            self.pos[b as usize],
+            self.pos[c as usize],
+        );
         let g = v3::cross(v3::sub(pb, pa), v3::sub(pc, pa));
         if v3::dot(g, want) >= 0.0 {
             self.tri(a, b, c);
@@ -180,7 +184,11 @@ impl TriMesh {
     pub fn flat_polygon(&mut self, pts: &[V3], normal: V3) {
         // Project to the plane of the normal and triangulate there.
         let n = v3::norm(normal);
-        let helper = if n[0].abs() < 0.9 { [1.0, 0.0, 0.0] } else { [0.0, 1.0, 0.0] };
+        let helper = if n[0].abs() < 0.9 {
+            [1.0, 0.0, 0.0]
+        } else {
+            [0.0, 1.0, 0.0]
+        };
         let u = v3::norm(v3::cross(n, helper));
         let v = v3::cross(n, u);
         let pts2: Vec<[f64; 2]> = pts
@@ -337,14 +345,20 @@ impl TriMesh {
             bdir[va] = 1.0;
             // Gram-Schmidt the tangent against the normal.
             let t = v3::norm(v3::sub(tdir, v3::mul(*n, v3::dot(tdir, *n))));
-            let w = if v3::dot(v3::cross(*n, t), bdir) >= 0.0 { 1.0 } else { -1.0 };
-            out.positions.push([pm[0] as f32, pm[1] as f32, pm[2] as f32]);
+            let w = if v3::dot(v3::cross(*n, t), bdir) >= 0.0 {
+                1.0
+            } else {
+                -1.0
+            };
+            out.positions
+                .push([pm[0] as f32, pm[1] as f32, pm[2] as f32]);
             out.normals.push([n[0] as f32, n[1] as f32, n[2] as f32]);
             out.uvs.push([
                 (pm[ua] / MICRO_TILE_M) as f32,
                 (pm[va] / MICRO_TILE_M) as f32,
             ]);
-            out.tangents.push([t[0] as f32, t[1] as f32, t[2] as f32, w]);
+            out.tangents
+                .push([t[0] as f32, t[1] as f32, t[2] as f32, w]);
         }
         out.indices = self.idx.clone();
         out
@@ -391,9 +405,7 @@ mod tests {
             ([0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]),
         ];
         for (n, u, v) in faces {
-            let c = |s: f64, t: f64| {
-                v3::add(n, v3::add(v3::mul(u, s), v3::mul(v, t)))
-            };
+            let c = |s: f64, t: f64| v3::add(n, v3::add(v3::mul(u, s), v3::mul(v, t)));
             let q = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
                 .map(|(s, t)| m.vert(c(s, t), n));
             m.quad(q[0], q[1], q[2], q[3]);
