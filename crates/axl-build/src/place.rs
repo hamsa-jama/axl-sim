@@ -200,17 +200,26 @@ impl Context {
         }
     }
 
-    /// "Underneath" aiming: the far side of the last part the ray passes through (the underside of
-    /// a robot seen from above), or the floor when the ray misses every part.
+    /// "Underneath" aiming: find the surface under the cursor as usual, then drop straight down
+    /// from that point and take the underside of the lowest part below it. This lets a part hang
+    /// below a plate that rests on the floor. Over the floor it behaves like [`Context::hit`].
     pub fn hit_far(&self, ray: &Ray) -> Option<Hit> {
+        let first = self.hit(ray)?;
+        if first.uid.is_none() {
+            return Some(first);
+        }
+        let down = Ray {
+            origin: [first.point[0], first.point[1], first.point[2] + 0.01],
+            dir: [0.0, 0.0, -1.0],
+        };
         let mut best: Option<Hit> = None;
         for (uid, ps) in &self.prims {
             for (_, p) in ps {
                 let (lo, hi) = p.aabb();
-                if let Some((t, axis, positive)) = ray_aabb_far(ray, lo, hi)
+                if let Some((t, axis, positive)) = ray_aabb_far(&down, lo, hi)
                     && best.as_ref().is_none_or(|b| t > b.t)
                 {
-                    let point = [0, 1, 2].map(|k| ray.origin[k] + ray.dir[k] * t);
+                    let point = [0, 1, 2].map(|k| down.origin[k] + down.dir[k] * t);
                     best = Some(Hit {
                         point,
                         axis,
@@ -221,7 +230,7 @@ impl Context {
                 }
             }
         }
-        best.or_else(|| self.hit(ray))
+        best.or(Some(first))
     }
 
     /// Nearest surface under a ray: a part's collision bounds or the floor.
@@ -405,9 +414,10 @@ pub fn find_snap(
         anchor: [i32; 3],
         snap: Snap,
         d: f64,
+        push: usize,
     }
     let mut cands: Vec<Cand> = Vec::new();
-    for free in frees {
+    for (push, free) in frees.iter().enumerate() {
         for (i, it) in items.iter().enumerate() {
             let Some(def) = cat.get(&it.part.0) else {
                 continue;
@@ -428,27 +438,36 @@ pub fn find_snap(
                             conn: (g.r.body, g.r.conn),
                         },
                         d: ray.distance_to(tp),
+                        push,
                     });
                 }
             }
         }
     }
-    cands.sort_by(|a, b| a.d.total_cmp(&b.d).then(a.snap.target.cmp(&b.snap.target)));
+    // Least push into the surface first (a ghost resting on the surface beats one sunk into it),
+    // then the connector nearest the cursor ray.
+    cands.sort_by(|a, b| {
+        a.push
+            .cmp(&b.push)
+            .then(a.d.total_cmp(&b.d))
+            .then(a.snap.target.cmp(&b.snap.target))
+    });
     let mut seen = HashSet::new();
-    let mut best: Option<(f64, usize, [i32; 3], Snap)> = None;
+    // Rank: (overlaps?, push, distance to the ray in 0.1 mm, overlap count).
+    let mut best: Option<((usize, usize, i64, usize), [i32; 3], Snap)> = None;
     for c in cands.into_iter().filter(|c| seen.insert(c.anchor)).take(48) {
         let ev = evaluate(cat, ctx, items, c.anchor);
-        let key = (c.d * 10.0).round();
-        let score = (!ev.overlaps.is_empty()) as usize * 1000 + ev.overlaps.len();
-        let better = match &best {
-            None => true,
-            Some((bd, bs, ..)) => key < *bd || (key == *bd && score < *bs),
-        };
-        if better {
-            best = Some((key, score, c.anchor, c.snap));
+        let rank = (
+            (!ev.overlaps.is_empty()) as usize,
+            c.push,
+            (c.d * 10.0).round() as i64,
+            ev.overlaps.len(),
+        );
+        if best.as_ref().is_none_or(|(r, ..)| rank < *r) {
+            best = Some((rank, c.anchor, c.snap));
         }
     }
-    best.map(|(_, _, a, s)| (a, s))
+    best.map(|(_, a, s)| (a, s))
 }
 
 /// Exempt pairs for a finished assembly (used by validation).

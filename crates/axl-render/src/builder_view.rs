@@ -212,7 +212,11 @@ fn builder_input(
             }
             if keys.just_pressed(KeyCode::KeyU) && b.ghost.is_some() {
                 b.underneath = !b.underneath;
-                say(if b.underneath { "Aiming through the robot to its underside.".into() } else { "Aiming at the top of the robot.".into() });
+                say(if b.underneath {
+                    "Aiming through the robot to its underside.".into()
+                } else {
+                    "Aiming at the top of the robot.".into()
+                });
             }
             if keys.just_pressed(KeyCode::KeyG) && b.ghost.is_none() {
                 match b.start_move() {
@@ -553,12 +557,22 @@ fn probe(
     windows: &Query<&Window, With<bevy::window::PrimaryWindow>>,
     root: &Query<&GlobalTransform, With<AxlRoot>>,
 ) {
-    let Some(path) = std::env::var_os("AXL_BUILDER_PROBE") else { return };
-    let (Ok((camera, cam_tf)), Ok(_), Ok(_)) = (cameras.single(), windows.single(), root.single()) else { return };
-    let Ok(text) = std::fs::read_to_string(&path) else { return };
+    let Some(path) = std::env::var_os("AXL_BUILDER_PROBE") else {
+        return;
+    };
+    let (Ok((camera, cam_tf)), Ok(_), Ok(_)) = (cameras.single(), windows.single(), root.single())
+    else {
+        return;
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return;
+    };
     let mut out = String::new();
     for line in text.lines() {
-        let v: Vec<f64> = line.split_whitespace().filter_map(|t| t.parse().ok()).collect();
+        let v: Vec<f64> = line
+            .split_whitespace()
+            .filter_map(|t| t.parse().ok())
+            .collect();
         if let [x, y, z] = v[..]
             && let Ok(px) = camera.world_to_viewport(cam_tf, bevy_pt([x, y, z], floor_z))
         {
@@ -569,7 +583,12 @@ fn probe(
     }
     let c = cam_tf.translation();
     let a = crate::frames::bevy_to_axl(c);
-    out.push_str(&format!("cam {:.0} {:.0} {:.0}\n", a.x * 1000.0, a.y * 1000.0, a.z * 1000.0 + floor_z as f32));
+    out.push_str(&format!(
+        "cam {:.0} {:.0} {:.0}\n",
+        a.x * 1000.0,
+        a.y * 1000.0,
+        a.z * 1000.0 + floor_z as f32
+    ));
     let mut p = path.clone();
     p.push(".out");
     let _ = std::fs::write(p, out);
