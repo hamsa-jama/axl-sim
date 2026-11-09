@@ -7,8 +7,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod block;
 pub mod earcut;
 pub mod extrude;
 pub mod lathe;
 pub mod profile;
 pub mod trimesh;
+pub mod types;

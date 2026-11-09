@@ -269,6 +269,11 @@ impl TriMesh {
     /// Count directed edges (by position, to 1e-6 mm) that have no opposite partner.
     /// Zero means the surface is closed and consistently oriented.
     pub fn open_edges(&self) -> usize {
+        self.open_edge_list().len()
+    }
+
+    /// The unmatched directed edges (start, end), mm.
+    pub fn open_edge_list(&self) -> Vec<(V3, V3)> {
         use std::collections::BTreeMap;
         let q = |p: V3| {
             [
@@ -288,10 +293,13 @@ impl TriMesh {
                 *count.entry((a, b)).or_insert(0) += 1;
             }
         }
-        let mut open = 0;
+        let mut open = Vec::new();
+        let f = |p: [i64; 3]| [p[0] as f64 * 1e-5, p[1] as f64 * 1e-5, p[2] as f64 * 1e-5];
         for (&(a, b), &n) in &count {
             let back = count.get(&(b, a)).copied().unwrap_or(0);
-            open += (n - back).unsigned_abs() as usize;
+            for _ in 0..(n - back).max(0) {
+                open.push((f(a), f(b)));
+            }
         }
         open
     }
