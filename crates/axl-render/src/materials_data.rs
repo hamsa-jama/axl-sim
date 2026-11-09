@@ -27,9 +27,9 @@ pub mod abs {
     /// Reflectance.
     pub const REFLECTANCE: f32 = 0.5;
     /// Clearcoat strength.
-    pub const CLEARCOAT: f32 = 0.6;
+    pub const CLEARCOAT: f32 = 0.25;
     /// Clearcoat roughness.
-    pub const CLEARCOAT_ROUGHNESS: f32 = 0.12;
+    pub const CLEARCOAT_ROUGHNESS: f32 = 0.15;
 }
 
 /// Maximum roughness change from the per-part variation.
