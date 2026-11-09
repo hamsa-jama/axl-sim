@@ -87,6 +87,9 @@ Pass when `fps` is at least 60 and `p99_ms` is below about 25 on a mid-range dis
 | --- | --- | --- | --- | --- | --- | --- |
 | before fixes | laptop-uhd620 | High | 13.5 | | about 100 | not applicable (integrated GPU) |
 | before fixes | laptop-uhd620 | Low | 22.3 | | 58 | no (target 30) |
+| after fixes (main 1d4a26a, 1920x1000, 200 boxes, 10 s) | laptop-uhd620 | High | 14.1 | | 85.5 | below target on an integrated GPU; expected, High targets a discrete GPU |
+| after fixes (same run) | laptop-uhd620 | Medium | 22.7 | | 47.6 | below target on an integrated GPU; expected, Medium targets an entry discrete GPU |
+| after fixes (same run) | laptop-uhd620 | Low | 40.6 | | 27.5 | pass (target 30 fps) |
 | (not run yet) | mid-range discrete | High | | | | |
 
 ## Other checks to run once
@@ -95,3 +98,19 @@ Pass when `fps` is at least 60 and `p99_ms` is below about 25 on a mid-range dis
 - First-launch benchmark from an empty data folder:
   `AXL_DATA_DIR=/tmp/axl-empty cargo run -p axl-app --release -- --exit-after-benchmark`, then read
   `/tmp/axl-empty/settings.ron`. The cut-offs in `assets/render/quality.ron` are `placeholder: calibrate`.
+
+## Post-fix measurement on the reference laptop
+
+laptop-uhd620, main at 1d4a26a, `--stress-boxes 200 --perf-seconds 10`, 1920x1000. Biggest GPU passes (ms):
+
+| Preset | fps | p99 ms | opaque | SSAO | TAA | bloom | SMAA | FXAA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| High | 14.1 | 85.5 | 38.5 | 13.5 | 7.3 | 3.8 | | |
+| Medium | 22.7 | 47.6 | 20.8 | 9.4 | | 4.1 | 2.3 | |
+| Low | 40.6 | 27.5 | 20.7 | | | | | 1.6 |
+
+Low passes. High and Medium are below their targets on this integrated GPU, which the spec expects.
+First launch from an empty folder logged "76.3 ms per frame (13.1 fps), chose Low" and wrote
+`settings.ron`. The environment line reads "filtered once and frozen". The opaque pass is the largest
+single cost on every preset (about 20.7 ms on Low and Medium); attribution runs with `--disable` are
+pending from the owner.
