@@ -247,10 +247,10 @@ Axles do not slide along their length in version 1. Their axial position is fixe
 
 | Family | Parts | Count |
 | --- | --- | --- |
-| Bricks | 1×1, 1×2, 1×4, 1×6, 1×8, 2×2, 2×4, 2×6, 2×8 | 9 |
-| Plates | 1×2, 1×4, 1×8, 2×2, 2×4, 2×8, 4×8, 8×16 | 8 |
-| Tiles (smooth top) | 1×2, 2×2, 2×4 | 3 |
-| Bricks with holes | 1×4, 1×6, 1×8, 1×12 (holes along the long side) | 4 |
+| Bricks | 1×1, 1×2, 1×3, 1×4, 1×6, 1×8, 2×2, 2×3, 2×4, 2×6, 2×8 | 11 |
+| Plates | 1×1, 1×2, 1×3, 1×4, 1×6, 1×8, 2×2, 2×4, 2×8, 4×8, 6×8, 8×16 | 12 |
+| Tiles (smooth top) | 1×1, 1×2, 1×4, 2×2, 2×4 | 5 |
+| Bricks with holes | 1×2, 1×4, 1×6, 1×8, 1×12 (holes along the long side) | 5 |
 | Beams | straight 3, 5, 7, 9, 11, 13 and 15 holes; L-shape 3×5; frame 5×7 | 9 |
 | Axles | lengths 2, 3, 4, 5, 6, 7, 8, 10, 12 | 9 |
 | Pins | friction pin, smooth pin, long friction pin (3 units), axle-pin | 4 |
@@ -262,7 +262,7 @@ Axles do not slide along their length in version 1. Their axial position is fixe
 | Sensors | ultrasonic distance, time-of-flight distance, colour, touch | 4 |
 | Colour variants | the same parts in 9 colours; each colour/part pair is not a separate part | n/a |
 
-That is 66 shape parts plus 9 devices, 75 in total. Phase 2 adds bevel gears, a worm gear, omni wheels and gripper parts. Phase 3 adds a camera and a 2D lidar.
+That is 75 parts: 67 shape parts (including the caster) and 8 devices (the hub, three motors and four sensors). Phase 2 adds bevel gears, a worm gear, omni wheels and gripper parts. Phase 3 adds a camera and a 2D lidar.
 
 **Ports.** Every motor and sensor must be plugged into one of the hub's six ports. That limits a robot to six devices, as on real hardware. The builder assigns the next free port automatically, and the user can change it.
 
