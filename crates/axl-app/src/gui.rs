@@ -30,6 +30,7 @@ struct SettingsStore {
 pub fn run(args: &Args) -> AppExit {
     // Screenshot, stress and perf runs never read or write the user's settings.
     let scripted = args.lookdev
+        || args.parts.is_some()
         || args.stress_boxes.is_some()
         || args.perf_seconds.is_some()
         || args.screenshot.is_some();
@@ -57,7 +58,16 @@ pub fn run(args: &Args) -> AppExit {
         quality,
         content: match args.stress_boxes {
             Some(n) => StageContent::Stress(n),
-            None => StageContent::Lookdev,
+            None => match &args.parts {
+                Some(q) => StageContent::Parts(axl_render::browser::BrowserState {
+                    query: q.clone(),
+                    selected: args.part.clone(),
+                    color: args.part_color.clone(),
+                    show_connectors: args.connectors,
+                    show_collision: args.collision,
+                }),
+                None => StageContent::Lookdev,
+            },
         },
         screenshot: args.screenshot.clone(),
         benchmark,
@@ -80,7 +90,7 @@ pub fn run(args: &Args) -> AppExit {
         .and_then(|s| s.split_once('x'))
         .and_then(|(w, h)| Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?)))
         .filter(|(w, h)| *w >= 320 && *h >= 240);
-    let big_window = args.lookdev || args.stress_boxes.is_some();
+    let big_window = args.lookdev || args.stress_boxes.is_some() || args.parts.is_some();
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins.set(WindowPlugin {

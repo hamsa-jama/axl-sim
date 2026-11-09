@@ -5,7 +5,9 @@
 use axl_parts::types::{Axis, CollisionPrim, ConnKind, PartDef};
 use bevy::prelude::*;
 
-use crate::camera_rig::{ActiveQuality, CameraHome, FocusTarget};
+use bevy::camera_controller::pan_orbit_camera::prelude::*;
+
+use crate::camera_rig::{ActiveQuality, CameraHome, FocusTarget, ViewCamera, orbit_transform};
 use crate::frames::{AxlRoot, axl_to_bevy};
 use crate::parts::{PartLibrary, display_rotation};
 use crate::scene::{PartMaterials, ShapeBuilder};
@@ -139,7 +141,7 @@ pub fn layout_rows(
 
 /// Camera that frames a layout of `w` x `d` metres, `h` tall, from above at 55 degrees.
 pub fn frame_layout(w: f32, d: f32, h: f32) -> CameraHome {
-    let pitch: f32 = 55.0;
+    let pitch: f32 = 68.0;
     let (vt, ht) = (
         17.5f32.to_radians().tan(),
         (17.5f32.to_radians().tan() * 1.6),
@@ -150,7 +152,7 @@ pub fn frame_layout(w: f32, d: f32, h: f32) -> CameraHome {
         focus: Vec3::new(0.0, 0.0, h * 0.25),
         yaw_deg: -90.0,
         pitch_deg: pitch,
-        distance: need_w.max(need_h).max(0.12),
+        distance: (need_w.max(need_h) * 0.95).max(0.12),
     }
 }
 
@@ -197,6 +199,7 @@ fn rebuild(
     mut home: ResMut<CameraHome>,
     mut focus: ResMut<FocusTarget>,
     mut view: ResMut<BrowserView>,
+    mut cams: Query<(&mut Transform, &mut PanOrbitCamera), With<ViewCamera>>,
 ) {
     if !state.is_changed() {
         return;
@@ -251,7 +254,7 @@ fn rebuild(
         .enumerate()
         .map(|(i, e)| i > 0 && entries[i - 1].cat != e.cat)
         .collect();
-    let (centres, total) = layout_rows(&sizes, &breaks, 0.62, 0.008);
+    let (centres, total) = layout_rows(&sizes, &breaks, 1.0, 0.01);
     let height = entries
         .iter()
         .map(|e| e.max.z - e.min.z)
@@ -292,6 +295,10 @@ fn rebuild(
     } else {
         frame_layout(total.x.max(0.05), total.y.max(0.05), height)
     };
+    if let Ok((mut tf, mut pan)) = cams.single_mut() {
+        *tf = orbit_transform(&home);
+        pan.last_anchor_depth = -(home.distance as f64);
+    }
 }
 
 fn axis_color(kind: ConnKind) -> Color {

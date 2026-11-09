@@ -36,6 +36,26 @@ pub struct Args {
     #[arg(long, value_name = "N", conflicts_with_all = ["headless", "lookdev"])]
     pub stress_boxes: Option<usize>,
 
+    /// Open the part browser. Takes a filter (id, name, category or `all`).
+    #[arg(long, value_name = "FILTER", conflicts_with_all = ["headless", "lookdev", "stress_boxes"])]
+    pub parts: Option<String>,
+
+    /// With --parts: isolate this one part id.
+    #[arg(long, value_name = "ID", requires = "parts")]
+    pub part: Option<String>,
+
+    /// With --parts: colour id for every part (for example red).
+    #[arg(long, value_name = "COLOR", requires = "parts", hide = true)]
+    pub part_color: Option<String>,
+
+    /// With --part: draw connectors.
+    #[arg(long, requires = "parts")]
+    pub connectors: bool,
+
+    /// With --part: draw collision shapes.
+    #[arg(long, requires = "parts")]
+    pub collision: bool,
+
     /// Quality preset: low, medium, high or ultra. Overrides the saved setting and skips the benchmark.
     #[arg(long, value_name = "PRESET", conflicts_with = "headless")]
     pub quality: Option<String>,
