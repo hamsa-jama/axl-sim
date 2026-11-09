@@ -16,42 +16,18 @@ path = "src/main.rs"
 default = ["gui"]
 # The window, renderer and UI. Build with `--no-default-features` for a
 # headless-only binary (used for fast iteration and for graders).
-gui = ["dep:bevy", "dep:bevy_egui"]
+gui = ["dep:bevy", "dep:bevy_egui", "dep:axl-render"]
 
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-[dependencies.bevy]
-version = "=0.20.1"
-optional = true
-default-features = false
-features = [
-    "std",
-    "async_executor",
-    "multi_threaded",
-    "bevy_log",
-    "bevy_window",
-    "bevy_winit",
-    "x11",
-    "wayland",
-    "bevy_render",
-    "bevy_core_pipeline",
-    "bevy_pbr",
-    "bevy_light",
-    "bevy_camera",
-    "bevy_mesh",
-    "bevy_color",
-    "bevy_image",
-    "bevy_shader",
-    "bevy_material",
-    "bevy_post_process",
-    "bevy_anti_alias",
-    "png",
-    "tonemapping_luts",
-]
+axl-render = { path = "../axl-render", optional = true }
+directories = "6"
+serde = { version = "1", features = ["derive"] }
+ron = "0.12"
+bevy = { workspace = true, optional = true }
 
 [dependencies.bevy_egui]
 version = "=0.43.1"

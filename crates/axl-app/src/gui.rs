@@ -1,50 +1,359 @@
 //! The desktop window (Bevy + egui). Needs a display and a GPU.
 
-use bevy::prelude::*;
+use axl_render::bevy::prelude::*;
+use axl_render::bevy::window::PresentMode;
+use axl_render::camera_rig::{
+    ActiveQuality, CameraHome, CameraMode, CameraSettings, UiCapture, ViewCamera, gizmo_axes,
+};
+use axl_render::grid::{CursorOnFloor, GridSettings, Measure, ViewMode};
+use axl_render::grid_math::GridUnits;
+use axl_render::quality::QualityPreset;
+use axl_render::{BenchmarkFinished, RenderOptions, StageContent, StagePlugin};
+use bevy_egui::input::EguiWantsInput;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 
 use crate::cli::Args;
+use crate::settings::Settings;
 
 /// Frames left before the app exits by itself (smoke tests only).
 #[derive(Resource)]
 struct FramesLeft(Option<u32>);
 
+/// Saved settings and where they live. `path` is `None` when this run must not touch disk.
+#[derive(Resource)]
+struct SettingsStore {
+    current: Settings,
+    path: Option<std::path::PathBuf>,
+}
+
 /// Open the AXL window and run until it is closed.
 pub fn run(args: &Args) -> AppExit {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
+    // Screenshot, stress and perf runs never read or write the user's settings.
+    let scripted = args.lookdev
+        || args.stress_boxes.is_some()
+        || args.perf_seconds.is_some()
+        || args.screenshot.is_some();
+    let path = (!scripted).then(Settings::default_path).flatten();
+    let current = match &path {
+        Some(p) => Settings::load(p).unwrap_or_else(|e| {
+            eprintln!("axl: {e}; using default settings and leaving the file alone");
+            Settings::default()
+        }),
+        None => Settings::default(),
+    };
+    let path = path.filter(|_| true);
+
+    let forced = args.quality.as_deref().and_then(QualityPreset::parse);
+    if let Some(q) = &args.quality
+        && forced.is_none()
+    {
+        eprintln!("axl: unknown quality {q:?}; use low, medium, high or ultra");
+    }
+    let quality = forced.or(current.quality).unwrap_or(QualityPreset::High);
+    // The first-launch benchmark runs only for a normal start with nothing saved.
+    let benchmark = !scripted && forced.is_none() && current.quality.is_none();
+
+    let options = RenderOptions {
+        quality,
+        content: match args.stress_boxes {
+            Some(n) => StageContent::Stress(n),
+            None => StageContent::Lookdev,
+        },
+        screenshot: args.screenshot.clone(),
+        benchmark,
+        perf_seconds: args.perf_seconds,
+        view_mode: match args.view.as_deref() {
+            Some("simulate") => ViewMode::Simulate,
+            _ => ViewMode::Builder,
+        },
+        camera_mode: match args.camera.as_deref() {
+            Some("follow") => CameraMode::Follow,
+            Some("top-down") => CameraMode::TopDown,
+            _ => CameraMode::Orbit,
+        },
+        camera_pose: args.camera_pose.as_deref().and_then(parse_pose),
+    };
+
+    let size = args
+        .window_size
+        .as_deref()
+        .and_then(|s| s.split_once('x'))
+        .and_then(|(w, h)| Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?)))
+        .filter(|(w, h)| *w >= 320 && *h >= 240);
+    let big_window = args.lookdev || args.stress_boxes.is_some();
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "AXL".into(),
+                resolution: size
+                    .unwrap_or(if big_window {
+                        (1920, 1080)
+                    } else {
+                        (1280, 800)
+                    })
+                    .into(),
+                // Frame-rate checks must not be capped by the monitor.
+                present_mode: if args.perf_seconds.is_some() {
+                    PresentMode::AutoNoVsync
+                } else {
+                    PresentMode::AutoVsync
+                },
                 ..default()
             }),
             ..default()
-        }))
-        .add_plugins(EguiPlugin::default())
-        .insert_resource(ClearColor(Color::srgb_u8(0x1e, 0x20, 0x24)))
-        .insert_resource(FramesLeft(args.exit_after_frames))
-        .add_systems(Startup, spawn_camera)
-        .add_systems(Update, exit_when_done)
-        .add_systems(EguiPrimaryContextPass, status_bar)
-        .run()
+        }),
+    )
+    .add_plugins(EguiPlugin::default())
+    .insert_resource(FramesLeft(args.exit_after_frames))
+    .insert_resource(GridSettings {
+        units: match args.units.as_deref() {
+            Some("metric") => GridUnits::Metric,
+            Some("studs") => GridUnits::Studs,
+            _ => current.units,
+        },
+        opacity_builder: current.grid_opacity_builder,
+        opacity_simulate: current.grid_opacity_simulate,
+        ..default()
+    })
+    .insert_resource(CameraSettings {
+        invert_orbit: current.invert_orbit,
+    })
+    .insert_resource(SettingsStore { current, path })
+    .add_plugins(StagePlugin(options))
+    .add_systems(
+        Update,
+        (
+            exit_when_done,
+            forward_egui_capture,
+            persist_settings,
+            remember_benchmark,
+        ),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        (control_bar, status_bar, gizmo_overlay).chain(),
+    );
+    app.run()
 }
 
-fn spawn_camera(mut commands: Commands) {
-    commands.spawn(Camera3d::default());
+/// Parse `fx,fy,fz,yaw,pitch,distance` (mm and degrees) into a camera home.
+fn parse_pose(s: &str) -> Option<CameraHome> {
+    let v: Vec<f32> = s
+        .split(',')
+        .map(|p| p.trim().parse().ok())
+        .collect::<Option<_>>()?;
+    let [fx, fy, fz, yaw, pitch, dist] = v[..] else {
+        return None;
+    };
+    Some(CameraHome {
+        focus: Vec3::new(fx, fy, fz) * 0.001,
+        yaw_deg: yaw,
+        pitch_deg: pitch,
+        distance: dist * 0.001,
+    })
 }
 
-/// A thin bar so the empty window shows that the UI layer is alive.
-fn status_bar(mut contexts: EguiContexts) -> Result {
-    let ctx = contexts.ctx_mut()?;
-    let mut viewport_ui = egui::Ui::new(
+/// Tell the 3D view when egui is using the mouse or keyboard.
+fn forward_egui_capture(wants: Res<EguiWantsInput>, mut ui: ResMut<UiCapture>) {
+    ui.pointer = wants.is_pointer_over_area() || wants.is_using_pointer();
+    ui.keyboard = wants.wants_keyboard_input();
+}
+
+/// A root `Ui` that panels can attach to (egui 0.36 panels need a parent `Ui`).
+fn viewport_ui(ctx: &egui::Context) -> egui::Ui {
+    egui::Ui::new(
         ctx.clone(),
         "viewport".into(),
         egui::UiBuilder::new()
             .layer_id(egui::LayerId::background())
             .max_rect(ctx.viewport_rect()),
-    );
-    egui::Panel::bottom("status").show(&mut viewport_ui, |ui| {
-        ui.label(format!("AXL {}", env!("CARGO_PKG_VERSION")));
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn control_bar(
+    mut contexts: EguiContexts,
+    mut quality: ResMut<ActiveQuality>,
+    mut grid: ResMut<GridSettings>,
+    mut mode: ResMut<ViewMode>,
+    mut cam_mode: ResMut<CameraMode>,
+    mut cam_settings: ResMut<CameraSettings>,
+    measure: Res<Measure>,
+    home: Res<CameraHome>,
+    mut cams: Query<&mut Transform, With<ViewCamera>>,
+) -> Result {
+    let ctx = contexts.ctx_mut()?;
+    let mut root = viewport_ui(ctx);
+    egui::Panel::top("controls").show(&mut root, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Quality");
+            let before = quality.0;
+            egui::ComboBox::from_id_salt("quality")
+                .selected_text(quality.0.label())
+                .show_ui(ui, |ui| {
+                    for p in QualityPreset::ALL {
+                        ui.selectable_value(&mut quality.0, p, p.label());
+                    }
+                });
+            let _ = before;
+            ui.separator();
+            ui.label("View");
+            egui::ComboBox::from_id_salt("viewmode")
+                .selected_text(match *mode {
+                    ViewMode::Builder => "Builder",
+                    ViewMode::Simulate => "Simulate",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut *mode, ViewMode::Builder, "Builder");
+                    ui.selectable_value(&mut *mode, ViewMode::Simulate, "Simulate");
+                });
+            ui.separator();
+            ui.label("Units");
+            ui.selectable_value(&mut grid.units, GridUnits::Studs, "Studs");
+            ui.selectable_value(&mut grid.units, GridUnits::Metric, "mm");
+            ui.separator();
+            ui.label("Grid opacity");
+            let mut pct = match *mode {
+                ViewMode::Builder => grid.opacity_builder,
+                ViewMode::Simulate => grid.opacity_simulate,
+            } * 100.0;
+            if ui
+                .add(
+                    egui::Slider::new(&mut pct, 0.0..=100.0)
+                        .suffix("%")
+                        .integer(),
+                )
+                .changed()
+            {
+                match *mode {
+                    ViewMode::Builder => grid.opacity_builder = pct / 100.0,
+                    ViewMode::Simulate => grid.opacity_simulate = pct / 100.0,
+                }
+            }
+            ui.separator();
+            ui.checkbox(&mut grid.stud_dots, "Stud dots");
+            ui.checkbox(&mut grid.measure_active, "Measure");
+            if grid.measure_active {
+                match (measure.distance_mm(), measure.distance_studs()) {
+                    (Some(mm), Some(studs)) => {
+                        ui.label(format!("{mm:.1} mm = {studs:.2} studs"));
+                    }
+                    _ => {
+                        ui.label("click two points on the floor");
+                    }
+                }
+            }
+            ui.separator();
+            ui.label("Camera");
+            egui::ComboBox::from_id_salt("cammode")
+                .selected_text(cam_mode.label())
+                .show_ui(ui, |ui| {
+                    for m in [CameraMode::Orbit, CameraMode::Follow, CameraMode::TopDown] {
+                        ui.selectable_value(&mut *cam_mode, m, m.label());
+                    }
+                });
+            ui.checkbox(&mut cam_settings.invert_orbit, "Invert orbit");
+            if ui.button("Reset view").clicked()
+                && let Ok(mut tf) = cams.single_mut()
+            {
+                *tf = if *cam_mode == CameraMode::TopDown {
+                    axl_render::camera_rig::top_down_transform(home.focus, home.distance)
+                } else {
+                    axl_render::camera_rig::orbit_transform(&home)
+                };
+            }
+        });
     });
+    Ok(())
+}
+
+fn status_bar(
+    mut contexts: EguiContexts,
+    cursor: Res<CursorOnFloor>,
+    quality: Res<ActiveQuality>,
+    cam_mode: Res<CameraMode>,
+    grid: Res<GridSettings>,
+) -> Result {
+    let ctx = contexts.ctx_mut()?;
+    let mut root = viewport_ui(ctx);
+    egui::Panel::bottom("status").show(&mut root, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(format!("AXL {}", env!("CARGO_PKG_VERSION")));
+            ui.separator();
+            ui.label(format!(
+                "{} | {} | {}",
+                quality.0.label(),
+                cam_mode.label(),
+                match grid.units {
+                    GridUnits::Studs => "stud grid",
+                    GridUnits::Metric => "metric grid",
+                }
+            ));
+            if let Some(p) = cursor.0 {
+                ui.separator();
+                ui.label(format!(
+                    "x {:.1} mm   y {:.1} mm   ({:.2}, {:.2} studs)",
+                    p.x * 1000.0,
+                    p.y * 1000.0,
+                    p.x * 125.0,
+                    p.y * 125.0
+                ));
+            }
+            ui.separator();
+            ui.label(
+                "Right-drag orbit | Middle-drag pan | Wheel zoom | V camera | Home reset | F focus",
+            );
+        });
+    });
+    Ok(())
+}
+
+/// The XYZ gizmo in the lower-left corner of the view (X red, Y green, Z blue).
+fn gizmo_overlay(
+    mut contexts: EguiContexts,
+    cams: Query<&GlobalTransform, With<ViewCamera>>,
+) -> Result {
+    let ctx = contexts.ctx_mut()?;
+    let Ok(cam) = cams.single() else {
+        return Ok(());
+    };
+    let view = ctx.viewport_rect();
+    let origin = egui::pos2(view.left() + 64.0, view.bottom() - 64.0 - 28.0);
+    let len = 40.0;
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("axl_gizmo"),
+    ));
+    painter.circle_filled(origin, len + 14.0, egui::Color32::from_black_alpha(60));
+    let colors = [
+        egui::Color32::from_rgb(0xE5, 0x39, 0x35),
+        egui::Color32::from_rgb(0x43, 0xA0, 0x47),
+        egui::Color32::from_rgb(0x1E, 0x88, 0xE5),
+    ];
+    let names = ["X", "Y", "Z"];
+    let mut axes: Vec<(usize, Vec2, f32)> = gizmo_axes(cam.rotation())
+        .into_iter()
+        .enumerate()
+        .map(|(i, (v, depth))| (i, v, depth))
+        .collect();
+    // Draw the farthest axis first so near axes overlap it.
+    axes.sort_by(|a, b| a.2.total_cmp(&b.2));
+    for (i, v, depth) in axes {
+        // Screen y grows downwards.
+        let tip = origin + egui::vec2(v.x, -v.y) * len;
+        let alpha = if depth < 0.0 { 140 } else { 255 };
+        let c = colors[i].gamma_multiply(alpha as f32 / 255.0);
+        painter.line_segment([origin, tip], egui::Stroke::new(3.0, c));
+        painter.circle_filled(tip, 8.0, c);
+        painter.text(
+            tip,
+            egui::Align2::CENTER_CENTER,
+            names[i],
+            egui::FontId::proportional(11.0),
+            egui::Color32::WHITE,
+        );
+    }
     Ok(())
 }
 
@@ -55,5 +364,52 @@ fn exit_when_done(mut left: ResMut<FramesLeft>, mut exit: MessageWriter<AppExit>
         } else {
             *n -= 1;
         }
+    }
+}
+
+/// Store the benchmark's choice so it runs only once.
+fn remember_benchmark(
+    mut done: MessageReader<BenchmarkFinished>,
+    mut store: ResMut<SettingsStore>,
+) {
+    for d in done.read() {
+        store.current.quality = Some(d.preset);
+        save(&store);
+    }
+}
+
+/// Save settings whenever the user changes a persisted option.
+fn persist_settings(
+    quality: Res<ActiveQuality>,
+    grid: Res<GridSettings>,
+    cam: Res<CameraSettings>,
+    mut store: ResMut<SettingsStore>,
+    mut started: Local<bool>,
+) {
+    // The first frame sets the baseline without writing.
+    if !*started {
+        *started = true;
+        return;
+    }
+    let mut next = store.current.clone();
+    // A quality chosen by the benchmark or the combo box is remembered.
+    if quality.is_changed() || store.current.quality.is_some() {
+        next.quality = Some(quality.0);
+    }
+    next.units = grid.units;
+    next.grid_opacity_builder = grid.opacity_builder;
+    next.grid_opacity_simulate = grid.opacity_simulate;
+    next.invert_orbit = cam.invert_orbit;
+    if next != store.current {
+        store.current = next;
+        save(&store);
+    }
+}
+
+fn save(store: &SettingsStore) {
+    if let Some(path) = &store.path
+        && let Err(e) = store.current.save(path)
+    {
+        eprintln!("axl: could not save settings: {e}");
     }
 }

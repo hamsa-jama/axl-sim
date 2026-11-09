@@ -6,6 +6,8 @@ mod cli;
 #[cfg(feature = "gui")]
 mod gui;
 mod headless;
+#[cfg(feature = "gui")]
+mod settings;
 
 use std::process::ExitCode;
 

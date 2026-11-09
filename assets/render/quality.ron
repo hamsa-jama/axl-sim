@@ -1,0 +1,10 @@
+// Quality benchmark settings (SPEC.md, "Quality presets").
+// placeholder: calibrate. The frame-time cut-offs need measuring on real GPUs.
+(
+    version: 1,
+    duration_s: 3.0,
+    warmup_frames: 20,
+    ultra_max_ms: 6.0,
+    high_max_ms: 12.0,
+    medium_max_ms: 20.0,
+)
