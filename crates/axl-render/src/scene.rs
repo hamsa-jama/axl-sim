@@ -212,11 +212,11 @@ impl PartMaterials {
         let m = match kind {
             MaterialKind::Abs => StandardMaterial {
                 base_color: base.into(),
-                perceptual_roughness: dbg("AXL_DBG_ROUGH", abs::ROUGHNESS) + rough_d,
+                perceptual_roughness: abs::ROUGHNESS + rough_d,
                 metallic: 0.0,
-                reflectance: dbg("AXL_DBG_REFL", abs::REFLECTANCE),
-                clearcoat: dbg("AXL_DBG_COAT", abs::CLEARCOAT),
-                clearcoat_perceptual_roughness: dbg("AXL_DBG_COATR", abs::CLEARCOAT_ROUGHNESS),
+                reflectance: abs::REFLECTANCE,
+                clearcoat: abs::CLEARCOAT,
+                clearcoat_perceptual_roughness: abs::CLEARCOAT_ROUGHNESS,
                 normal_map_texture: micro_on.then(|| self.micro.clone()),
                 ..default()
             },
@@ -513,9 +513,4 @@ mod variation_tests {
         let set: HashSet<_> = (0..5000u32).map(quantised_variation).collect();
         assert!(set.len() <= 9, "{} variations", set.len());
     }
-}
-
-/// TEMP experiment override.
-fn dbg(name: &str, default: f32) -> f32 {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }

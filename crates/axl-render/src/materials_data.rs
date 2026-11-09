@@ -20,16 +20,16 @@ pub fn part_color(id: &str) -> Option<[u8; 3]> {
     PART_COLORS.iter().find(|(n, _)| *n == id).map(|(_, c)| *c)
 }
 
-/// ABS plastic surface values (SPEC.md, "Materials").
+/// ABS plastic surface values (SPEC.md "Materials", superseded by decision 0009: glossier).
 pub mod abs {
     /// Perceptual roughness.
-    pub const ROUGHNESS: f32 = 0.28;
+    pub const ROUGHNESS: f32 = 0.10;
     /// Reflectance.
     pub const REFLECTANCE: f32 = 0.5;
     /// Clearcoat strength.
-    pub const CLEARCOAT: f32 = 0.25;
+    pub const CLEARCOAT: f32 = 0.10;
     /// Clearcoat roughness.
-    pub const CLEARCOAT_ROUGHNESS: f32 = 0.15;
+    pub const CLEARCOAT_ROUGHNESS: f32 = 0.05;
 }
 
 /// Maximum roughness change from the per-part variation.
@@ -37,7 +37,7 @@ pub const ROUGHNESS_JITTER: f32 = 0.03;
 /// Maximum brightness change from the per-part variation (1.5%).
 pub const BRIGHTNESS_JITTER: f32 = 0.015;
 /// Strength of the micro-surface normal map.
-pub const MICRO_NORMAL_STRENGTH: f32 = 0.025;
+pub const MICRO_NORMAL_STRENGTH: f32 = 0.012;
 /// Side of the micro-surface texture in pixels.
 pub const MICRO_NORMAL_SIZE: usize = 256;
 
