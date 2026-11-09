@@ -11,6 +11,7 @@
 pub mod abi;
 pub mod api;
 mod state;
+pub mod toolchain;
 mod wasi;
 
 use std::sync::Arc;

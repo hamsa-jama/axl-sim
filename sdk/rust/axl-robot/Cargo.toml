@@ -1,0 +1,10 @@
+[package]
+name = "axl-robot"
+description = "The Rust interface to the AXL robot simulator. Mirrors sdk/c/axl.h."
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Built on its own for wasm32-wasip1 (and checked on the host), not as part of the AXL workspace.
+[workspace]
