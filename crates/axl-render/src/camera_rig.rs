@@ -158,8 +158,8 @@ pub fn spawn_view_camera(
     lighting: &LightingConfig,
     home: &CameraHome,
     quality: QualityPreset,
+    disable: &crate::diagnostics::DisableSet,
 ) -> Entity {
-    let env = images.add(crate::lighting::studio_cubemap(256));
     let exposure = Exposure {
         ev100: lighting.camera.ev100(),
     };
@@ -183,24 +183,41 @@ pub fn spawn_view_camera(
             orbit_transform(home),
             Hdr,
             Msaa::Off,
-            Tonemapping::AgX,
+            if disable.tonemap {
+                Tonemapping::None
+            } else {
+                Tonemapping::AgX
+            },
             exposure,
             ColorGrading {
                 global: ColorGradingGlobal {
-                    post_saturation: lighting.camera.post_saturation,
+                    post_saturation: if disable.tonemap {
+                        1.0
+                    } else {
+                        lighting.camera.post_saturation
+                    },
                     ..default()
                 },
                 ..default()
             },
             pan,
-            GeneratedEnvironmentMapLight {
-                environment_map: env,
-                intensity: lighting.environment.intensity,
-                ..default()
-            },
-            studio_bloom(lighting.bloom.intensity),
         ))
         .id();
+    if disable.env {
+        // A flat ambient light stands in for the studio so the scene is still lit.
+        commands.insert_resource(GlobalAmbientLight {
+            color: Color::WHITE,
+            brightness: 120.0,
+            ..default()
+        });
+    } else {
+        let env = images.add(crate::lighting::studio_cubemap(256));
+        commands.entity(cam).insert(GeneratedEnvironmentMapLight {
+            environment_map: env,
+            intensity: lighting.environment.intensity,
+            ..default()
+        });
+    }
 
     let dir = axl_to_bevy(lighting.key_light_direction_axl());
     commands.spawn((
@@ -209,7 +226,7 @@ pub fn spawn_view_camera(
         DirectionalLight {
             color: srgb(lighting.key_light.color_srgb),
             illuminance: lighting.key_light.illuminance_lux,
-            shadow_maps_enabled: true,
+            shadow_maps_enabled: !disable.shadows,
             // The default biases are tuned for metre-scale scenes; parts are centimetres.
             shadow_depth_bias: 0.0003,
             shadow_normal_bias: 0.4,
@@ -224,12 +241,17 @@ pub fn spawn_view_camera(
 }
 
 /// Adds the camera rig systems.
-pub struct CameraRigPlugin;
+pub struct CameraRigPlugin {
+    /// Leave mesh picking out (`--disable picking`).
+    pub no_picking: bool,
+}
 
 impl Plugin for CameraRigPlugin {
     fn build(&self, app: &mut App) {
+        if !self.no_picking {
+            app.add_plugins(MeshPickingPlugin);
+        }
         app.add_plugins((
-            MeshPickingPlugin,
             DefaultPanOrbitCameraPlugins,
             crate::camera_input::AxlCameraInputPlugin,
         ))
@@ -379,6 +401,7 @@ fn apply_orbit_inversion(
 #[allow(clippy::too_many_arguments)]
 pub fn apply_quality(
     quality: Option<Res<ActiveQuality>>,
+    disable: Res<crate::diagnostics::DisableSet>,
     lighting: Res<LightingConfig>,
     mut commands: Commands,
     mut shadow_map: ResMut<DirectionalLightShadowMap>,
@@ -392,7 +415,22 @@ pub fn apply_quality(
         return;
     }
     *last = Some(quality.0);
-    let q = quality.0.settings();
+    let mut q = quality.0.settings();
+    if disable.taa && q.aa == AaMode::Taa {
+        q.aa = AaMode::Fxaa;
+    }
+    if disable.ssao {
+        q.ao = AoLevel::Off;
+    }
+    if disable.contact_shadows {
+        q.contact_shadows = false;
+    }
+    if disable.bloom {
+        q.bloom = false;
+    }
+    if disable.shadows {
+        q.contact_shadows = false;
+    }
 
     // Start from a clean slate for everything a preset can switch.
     let mut e = commands.entity(cam);
@@ -423,6 +461,13 @@ pub fn apply_quality(
     }
     if q.bloom {
         e.insert(studio_bloom(lighting.bloom.intensity));
+    }
+    // Without bloom there is no need for a half-float target: an 8-bit one halves the memory
+    // traffic, which is what limits integrated GPUs (tonemapping then happens in the shader).
+    if q.bloom {
+        e.insert(Hdr);
+    } else {
+        e.remove::<Hdr>();
     }
     if q.contact_shadows {
         // Distances are in metres; the defaults (30 cm rays) are far too long for small parts.
@@ -456,6 +501,7 @@ pub fn apply_quality(
     shadow_map.size = q.shadows.map_size as usize;
     for (light_entity, mut light) in &mut lights {
         light.contact_shadows_enabled = q.contact_shadows;
+        light.shadow_maps_enabled = !disable.shadows;
         commands.entity(light_entity).insert(
             CascadeShadowConfigBuilder {
                 num_cascades: q.shadows.cascades,

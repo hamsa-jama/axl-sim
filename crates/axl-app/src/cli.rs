@@ -36,6 +36,19 @@ pub struct Args {
     #[arg(long, value_name = "N", conflicts_with_all = ["headless", "lookdev"])]
     pub stress_boxes: Option<usize>,
 
+    /// Exit as soon as the first-launch benchmark has finished (to check what it picks).
+    #[arg(long, hide = true, conflicts_with = "headless")]
+    pub exit_after_benchmark: bool,
+
+    /// Switch effects off to find what a GPU or driver cannot handle. Comma-separated list of:
+    /// grid, env, ssao, taa, contact-shadows, shadows, bloom, tonemap, micro-normal, picking.
+    #[arg(long, value_name = "LIST", conflicts_with = "headless")]
+    pub disable: Option<String>,
+
+    /// Switch every optional effect off (same as `--disable all`).
+    #[arg(long, conflicts_with = "headless")]
+    pub safe_render: bool,
+
     /// Quality preset: low, medium, high or ultra. Overrides the saved setting and skips the benchmark.
     #[arg(long, value_name = "PRESET", conflicts_with = "headless")]
     pub quality: Option<String>,

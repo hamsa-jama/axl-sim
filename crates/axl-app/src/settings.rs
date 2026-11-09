@@ -71,6 +71,11 @@ impl std::error::Error for SettingsError {}
 impl Settings {
     /// `<data dir>/settings.ron`, where the data dir comes from the platform (see the spec).
     pub fn default_path() -> Option<PathBuf> {
+        // `AXL_DATA_DIR` points the settings at another folder (for example an empty one, to
+        // repeat the first-launch benchmark).
+        if let Some(dir) = std::env::var_os("AXL_DATA_DIR").filter(|d| !d.is_empty()) {
+            return Some(PathBuf::from(dir).join("settings.ron"));
+        }
         directories::ProjectDirs::from("org", "axl", "AXL")
             .map(|d| d.data_dir().join("settings.ron"))
     }
@@ -200,6 +205,31 @@ mod tests {
         // No temporary file is left behind.
         assert!(!dir.join(".settings.ron.tmp").exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn benchmark_choice_is_persisted_to_a_fresh_data_folder() {
+        use axl_render::quality::{BenchmarkConfig, BenchmarkRun};
+        // A slow integrated GPU: 80 ms frames. The benchmark must pick Low.
+        let mut run = BenchmarkRun::new(BenchmarkConfig::default());
+        let picked = (0..2000)
+            .find_map(|_| run.push_frame(0.080))
+            .expect("benchmark finishes");
+        assert_eq!(picked.0, QualityPreset::Low);
+        // The data folder does not exist yet; saving creates it.
+        let dir = scratch("bench").join("nested").join("axl");
+        let path = dir.join("settings.ron");
+        let s = Settings {
+            quality: Some(picked.0),
+            ..Settings::default()
+        };
+        s.save(&path).unwrap();
+        assert!(path.exists());
+        assert_eq!(
+            Settings::load(&path).unwrap().quality,
+            Some(QualityPreset::Low)
+        );
+        let _ = std::fs::remove_dir_all(scratch("bench"));
     }
 
     #[test]
