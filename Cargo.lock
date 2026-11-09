@@ -553,6 +553,7 @@ version = "0.1.0"
 dependencies = [
  "axl-build",
  "axl-compile",
+ "axl-host",
  "axl-hw",
  "axl-mujoco",
  "axl-parts",

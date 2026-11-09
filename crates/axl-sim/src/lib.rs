@@ -8,6 +8,9 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod program;
+pub use program::{MAX_PLOT_CHANNELS, ProgramConfig, SimEvent, SimRobot};
+
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -137,6 +140,11 @@ impl SimCore {
         &self.hw
     }
 
+    /// The hardware models, mutable.
+    pub fn hardware_mut(&mut self) -> &mut Hardware {
+        &mut self.hw
+    }
+
     /// Back to the start.
     pub fn reset(&mut self) {
         self.physics.reset();
@@ -163,7 +171,7 @@ impl SimCore {
             .extend((0..self.n_bodies).map(|i| self.physics.body_pose(BodyId(i))));
     }
 
-    fn due(&mut self) -> bool {
+    pub(crate) fn due(&mut self) -> bool {
         let t = self.physics.time();
         if t - self.last_publish >= SNAPSHOT_INTERVAL_S - 1e-9 {
             self.last_publish = t;
@@ -198,6 +206,7 @@ pub fn run_headless(
 /// A running sim thread.
 pub struct Sandbox {
     commands: Sender<Command>,
+    events: Receiver<SimEvent>,
     output: Output<SimSnapshot>,
     thread: Option<JoinHandle<()>>,
 }
@@ -216,11 +225,49 @@ impl Sandbox {
             .name("axl-sim".into())
             .spawn(move || sim_thread(&robot, &volts, rx, input))
             .ok();
+        let (_, events) = unbounded();
         Ok(Self {
             commands: tx,
+            events,
             output,
             thread,
         })
+    }
+
+    /// Start the sim thread with a learner program. `paced` runs against the wall clock; unpaced
+    /// runs as fast as possible (tests). Events stream through [`Sandbox::events`].
+    pub fn spawn_program(
+        robot: &Compiled,
+        volts: &[(String, f64)],
+        opts: HwOptions,
+        program: ProgramConfig,
+        paced: bool,
+    ) -> Result<Self, SimError> {
+        let robot = robot.clone();
+        let volts = volts.to_vec();
+        SimCore::with_options(&robot, &volts, opts)?;
+        let (tx, rx) = unbounded();
+        let (etx, events) = unbounded();
+        let (input, output) = triple_buffer(&SimSnapshot::default());
+        let thread = std::thread::Builder::new()
+            .name("axl-sim".into())
+            .spawn(move || {
+                if let Ok(core) = SimCore::with_options(&robot, &volts, opts) {
+                    program::sim_thread_with_program(core, program, rx, input, etx, paced);
+                }
+            })
+            .ok();
+        Ok(Self {
+            commands: tx,
+            events,
+            output,
+            thread,
+        })
+    }
+
+    /// What the program has done since the last call (logs, plots, drawings, the end).
+    pub fn events(&self) -> &Receiver<SimEvent> {
+        &self.events
     }
 
     /// Send a command to the sim thread.
