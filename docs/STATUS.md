@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M4 is accepted and merged into `main` (merge commit 8ddb35b). `fix/env-lighting` is merged (01c319c): per-pass perf lines restored with a test, dimmer room with discrete softboxes, `environment.cube_size`, decision 0008. Crisp softbox reflections were NOT achieved (see 0008: Bevy's prefilter blurs them; a custom CPU-baked prefiltered map is the follow-up). M5 Compiler is not started. Open items: owner checks O10, O11, and re-measure env cost on the laptop (docs/perf.md).
+M5 Compiler is accepted and merged into `main` (merge commit 02da742); the next milestone is M6 Hardware (not started). M4 is accepted and merged into `main` (merge commit 8ddb35b). `fix/env-lighting` is merged (01c319c): per-pass perf lines restored with a test, dimmer room with discrete softboxes, `environment.cube_size`, decision 0008. Crisp softbox reflections were NOT achieved (see 0008: Bevy's prefilter blurs them; a custom CPU-baked prefiltered map is the follow-up). Open items: owner checks O10 to O13, and re-measure env cost on the laptop (docs/perf.md).
 
 ## Owner checks
 
@@ -40,7 +40,7 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | O10 | M4 | Build a robot in the UI on a real GPU | `cargo run -p axl-app --release -- --builder`. 1. Pick "Plate 8x16" in the palette (type `plate_8x16` in the search box), click on the floor. 2. Pick the hub, click on the plate. 3. Pick "Medium motor", press `R` twice and `U`, hover the plate near a side, click (the motor hangs under the plate). 4. Pick "Axle 3" and press `R` three times (right side), hover the motor's output end, click. 5. Pick "Wheel 56 mm", press `T`, hover the axle end, click. 6. Repeat mirrored on the other side (orbit with right-drag first). 7. Press Save, quit, start again and use Load. 8. Or load the Rover starter from the Load box and check the validation panel says "No problems found". Judge: is hanging parts with `U` understandable? Do the ghost, highlights and dots read well? |
 | O11 | M4 | Push the `m04-done` tag (sandbox push refused) | `git fetch origin && git tag -a m04-done -m "M4 builder accepted" 8ddb35b && git push origin m04-done`. |
 | O12 | M5 | Sandbox looks right on a real GPU | `cargo run -p axl-app --release -- --sandbox rover --volts left=4,right=4`. The Rover should drive forward in a straight line with wheels turning and the caster rolling. Try `left=4,right=2` for a curve and `left=4,right=-4` for a spin. |
-| O13 | M5 | Push the `m05-done` tag (sandbox push refused) | `git fetch origin && git tag -a m05-done -m "M5 compiler accepted" MERGE_SHA && git push origin m05-done` (MERGE_SHA is the M5 merge commit named in Where I stopped). |
+| O13 | M5 | Push the `m05-done` tag (sandbox push refused) | `git fetch origin && git tag -a m05-done -m "M5 compiler accepted" 02da742 && git push origin m05-done` (02da742 is the M5 merge commit named in Where I stopped). |
 
 ## Development notes
 
