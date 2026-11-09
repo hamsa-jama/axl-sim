@@ -16,3 +16,6 @@ path = "src/main.rs"
 axl-mujoco = { path = "../axl-mujoco" }
 rand_chacha = "0.3"
 sha2 = "0.10"
+axl-compile = { path = "../axl-compile" }
+axl-build = { path = "../axl-build" }
+axl-parts = { path = "../axl-parts" }

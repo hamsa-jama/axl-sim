@@ -11,6 +11,7 @@ mod cli;
 mod gui;
 mod headless;
 #[cfg(feature = "gui")]
+mod sandbox;
 mod settings;
 
 use std::process::ExitCode;

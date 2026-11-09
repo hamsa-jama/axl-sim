@@ -16,3 +16,4 @@ thiserror = "2"
 axl-parts = { path = "../axl-parts" }
 axl-build = { path = "../axl-build" }
 tracing = "0.1"
+axl-compile = { path = "../axl-compile" }

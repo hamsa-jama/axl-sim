@@ -42,3 +42,13 @@ All crates exist as skeletons. Only `axl-app` has code: a clap command line, a h
 - Connections are never stored: `ConnIndex::connections()` derives them from placement. Overlaps between a shaft and the part whose hole it passes through are exempt (collision shapes are solid boxes).
 - Snapping: the cursor ray hits the nearest part bounds or the floor, the ghost rests on that face (and is also tried pushed into it in 4 mm steps, because holes lie inside parts), every free compatible connector within 6 mm gives a candidate; ranking is overlap-free first, least push, nearest to the ray, fewer overlaps. `U` aims through the robot to its underside.
 - `axl-render::builder_view`: draws the robot, ghost, highlights, snap marker, stud dots and surface measure; handles mouse and keys. `axl-app::builder_ui`: egui panels and autosave. `AXL_BUILDER_PROBE=<file>` (test aid) projects robot-frame points to window pixels so scripted xdotool runs can aim real mouse events.
+
+## After M5
+
+`axl-compile` turns an `Assembly` into a `RobotModel` (rigid merge by union-find, hinge links with
+the coaxial rule, spanning tree from the hub, `connect` pairs for loops, gear couplings) and then
+into MJCF, with a `DeviceMap` (names to actuators, sensors, sites) and a `BodyMap` (MuJoCo body to
+the parts it holds). `axl-sim` owns MuJoCo on its own thread and publishes `SimSnapshot`s through a
+triple buffer; the app pumps them into `axl-render`'s `SnapshotBuffer`, and `sim_view` hangs each
+part's meshes under a `SimBody` entity using the body map. Try it: `axl --sandbox rover
+--volts left=4,right=4`. Constants are in `assets/physics/hardware.ron` (placeholder: calibrate).

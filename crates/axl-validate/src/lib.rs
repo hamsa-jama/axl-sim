@@ -13,6 +13,7 @@ pub mod report;
 pub mod scenes;
 mod v_dynamics;
 mod v_repro;
+mod v_robot;
 
 pub use report::{Row, TestResult, run_all, run_selected};
 

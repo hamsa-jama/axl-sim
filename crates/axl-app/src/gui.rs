@@ -42,6 +42,7 @@ pub fn run(args: &Args) -> AppExit {
         || args.parts.is_some()
         || args.stress_boxes.is_some()
         || args.perf_seconds.is_some()
+        || args.sandbox.is_some()
         || args.screenshot.is_some();
     let path = (!scripted).then(Settings::default_path).flatten();
     let current = match &path {
@@ -107,10 +108,23 @@ pub fn run(args: &Args) -> AppExit {
         disable.env = true;
     }
 
+    let sandbox = match args.sandbox.as_deref().map(|s| {
+        let volts = crate::sandbox::parse_volts(args.volts.as_deref().unwrap_or(""))?;
+        crate::sandbox::start(s, &volts)
+    }) {
+        Some(Ok(v)) => Some(v),
+        Some(Err(e)) => {
+            eprintln!("axl: --sandbox: {e}");
+            return AppExit::error();
+        }
+        None => None,
+    };
+
     let options = RenderOptions {
         quality,
         content: match args.stress_boxes {
             Some(n) => StageContent::Stress(n),
+            None if sandbox.is_some() => StageContent::Sandbox,
             None if args.builder => StageContent::Builder,
             None => match &args.parts {
                 Some(q) => StageContent::Parts(axl_render::browser::BrowserState {
@@ -147,8 +161,11 @@ pub fn run(args: &Args) -> AppExit {
         .and_then(|s| s.split_once('x'))
         .and_then(|(w, h)| Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?)))
         .filter(|(w, h)| *w >= 320 && *h >= 240);
-    let big_window =
-        args.lookdev || args.stress_boxes.is_some() || args.parts.is_some() || args.builder;
+    let big_window = args.lookdev
+        || args.stress_boxes.is_some()
+        || args.parts.is_some()
+        || args.builder
+        || args.sandbox.is_some();
     let mut app = App::new();
     // Ask for the high-performance (discrete) adapter on hybrid-graphics laptops. WGPU_POWER_PREF
     // and WGPU_BACKEND in the environment still override this, so the owner can test other adapters.
@@ -233,6 +250,12 @@ pub fn run(args: &Args) -> AppExit {
             .after(status_bar)
             .after(browser_panel),
     );
+    if let Some((scene, sim)) = sandbox {
+        app.insert_resource(scene).insert_resource(sim).add_systems(
+            Update,
+            crate::sandbox::pump.before(axl_render::sync::sync_bodies),
+        );
+    }
     app.run()
 }
 
