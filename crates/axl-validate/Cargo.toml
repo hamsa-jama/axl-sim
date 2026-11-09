@@ -19,3 +19,4 @@ sha2 = "0.10"
 axl-compile = { path = "../axl-compile" }
 axl-build = { path = "../axl-build" }
 axl-parts = { path = "../axl-parts" }
+axl-hw = { path = "../axl-hw" }

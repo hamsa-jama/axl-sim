@@ -11,6 +11,7 @@
 
 #![warn(missing_docs)]
 
+pub mod alloc_count;
 mod error;
 mod physics;
 mod types;

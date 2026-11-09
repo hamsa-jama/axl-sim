@@ -203,27 +203,35 @@ impl TimeOfFlight {
         &self.name
     }
 
-    /// One measurement now, with noise: metres, or -1. The five rays are averaged (decision 0011).
+    /// One measurement now, with noise: metres, or -1. The median of the valid rays (decision 0011).
     pub fn measure(&mut self, physics: &mut Physics) -> f64 {
         let Some((pos, axes)) = physics.site_frame(self.site) else {
             return -1.0;
         };
-        let (mut sum, mut n) = (0.0, 0usize);
-        for d in &self.dirs {
+        let mut vals = [0.0f64; 16];
+        let mut n = 0usize;
+        for d in self.dirs.iter().take(vals.len()) {
             let dir = combine(&axes, *d);
             if let Some(hit) = physics.ray(pos, dir, GroupMask::WORLD_AND_OBJECTS)
                 && hit.distance >= self.p.min_m
                 && hit.distance <= self.p.max_m
                 && -dot(hit.normal, axes[2]) >= self.min_cos
             {
-                sum += hit.distance;
+                vals[n] = hit.distance;
                 n += 1;
             }
         }
         if n == 0 {
             return -1.0;
         }
-        let d = sum / n as f64;
+        // The median of the valid rays: robust at edges and on tilted walls (decision 0011).
+        let v = &mut vals[..n];
+        v.sort_by(f64::total_cmp);
+        let d = if n % 2 == 1 {
+            v[n / 2]
+        } else {
+            0.5 * (v[n / 2 - 1] + v[n / 2])
+        };
         d + self.noise.gauss(self.p.sigma_abs_m + self.p.sigma_rel * d)
     }
 
