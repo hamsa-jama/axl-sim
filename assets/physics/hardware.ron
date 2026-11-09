@@ -1,0 +1,64 @@
+// Physical constants of the compiled robot (SPEC.md, "Hardware models" and "Assembly-to-physics
+// compiler"). Every number here is `placeholder: calibrate` (see docs/calibration.md); each
+// comment names where the default comes from. M6 adds the battery and the sensors to this file.
+(
+    version: 1,
+    solver: (
+        // SPEC "Fixed MJCF header": starting value, calibrate so a resting robot sinks < 0.2 mm.
+        solref: (0.004, 1.0),
+        solimp: (0.95, 0.99, 0.001),
+        // SPEC "Risks": a minimum body mass of 1 g keeps light bodies stable.
+        min_body_mass_kg: 0.001,
+    ),
+    // DC motors, values at the output shaft (SPEC "Motor parameters"). placeholder: calibrate.
+    motors: (
+        medium: (
+            v_nom: 7.4,
+            v_max: 8.4,
+            omega0: 26.2,
+            stall_torque: 0.15,
+            resistance: 6.0,
+            armature: 1.5e-4,
+            friction_loss: 0.004,
+        ),
+        large: (
+            v_nom: 7.4,
+            v_max: 8.4,
+            omega0: 18.3,
+            stall_torque: 0.40,
+            resistance: 4.0,
+            armature: 3.0e-4,
+            friction_loss: 0.008,
+        ),
+        servo: (
+            v_nom: 7.4,
+            v_max: 8.4,
+            omega0: 6.2,
+            stall_torque: 0.25,
+            resistance: 5.0,
+            armature: 1.0e-4,
+            friction_loss: 0.006,
+        ),
+    ),
+    // Sliding friction (SPEC "Friction and joints"). placeholder: calibrate.
+    friction: (
+        abs: 0.35,
+        rubber_sliding: 1.0,
+        rubber_torsional: 0.005,
+        steel: 0.2,
+        floor: 0.5,
+        wall: 0.4,
+    ),
+    // Joint damping (N m s/rad) and friction loss (N m) (SPEC "Friction and joints").
+    // placeholder: calibrate.
+    joints: (
+        smooth_pin: (damping: 1e-5, friction_loss: 0.0),
+        friction_pin: (damping: 1e-5, friction_loss: 0.002),
+        axle_in_hole: (damping: 1e-5, friction_loss: 0.0005),
+        // A motor's own hinge uses the generic joint damping of the table; its friction loss is the
+        // motor's gearbox loss above.
+        motor_damping: 1e-5,
+        gear_mesh_friction_loss: 0.0005,
+        caster_ball_damping: 1e-6,
+    ),
+)

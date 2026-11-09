@@ -1,0 +1,25 @@
+---
+source: crates/axl-compile/tests/starters.rs
+expression: "compile_asm(&starter(\"test_chassis\")).mjcf"
+---
+<mujoco model="axl">
+  <compiler angle="radian" inertiafromgeom="true" autolimits="true"/>
+  <option timestep="0.001" integrator="implicitfast" cone="elliptic" impratio="10" gravity="0 0 -9.80665"/>
+  <default>
+    <geom condim="3" solref="0.004 1" solimp="0.95 0.99 0.001"/>
+  </default>
+  <worldbody>
+    <geom name="floor" type="plane" size="0 0 0.05" contype="2" conaffinity="1" group="0" friction="0.5 0.005 0.0001"/>
+    <body name="root" pos="0 0 0.0037">
+      <freejoint name="root"/>
+      <geom name="p1_0_0" type="box" pos="0 0 -0.0016" size="0.0319 0.0239 0.0016" mass="0.006512828" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <geom name="p2_0_0" type="box" pos="0 0 0.0112" size="0.0319 0.0239 0.0112" mass="0.15" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <site name="imu" pos="0 0 0.0112" size="0.002" group="4"/>
+    </body>
+  </worldbody>
+  <sensor>
+    <gyro name="gyro" site="imu"/>
+    <accelerometer name="accel" site="imu"/>
+    <framequat name="quat" objtype="site" objname="imu"/>
+  </sensor>
+</mujoco>
