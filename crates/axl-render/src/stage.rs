@@ -11,6 +11,7 @@ use crate::camera_rig::{ActiveQuality, CameraHome, FocusTarget, spawn_view_camer
 use crate::frames::spawn_root;
 use crate::grid::{GridMaterial, GridSettings, spawn_floor};
 use crate::lighting::LightingConfig;
+use crate::parts::PartLibrary;
 use crate::quality::{BenchmarkConfig, BenchmarkRun, QualityPreset};
 use crate::scene::{
     PartMaterials, SceneDef, ShapeBuilder, StressBoxes, spawn_scene, spawn_stress_boxes,
@@ -24,6 +25,8 @@ pub enum StageContent {
     Lookdev,
     /// `n` boxes moving through the snapshot path, for the frame-rate check.
     Stress(usize),
+    /// The part browser: a contact sheet of the parts matching the filter (empty shows all).
+    Parts(crate::browser::BrowserState),
 }
 
 /// Everything the render plugin needs at start-up.
@@ -130,6 +133,7 @@ impl Plugin for StagePlugin {
             ))
             .add_plugins(crate::diagnostics::DiagnosticsPlugin)
             .insert_resource(GlobalAmbientLight::NONE)
+            .insert_resource(PartLibrary::load())
             .init_resource::<SnapshotBuffer>()
             .init_resource::<crate::sync::PlaybackSpeed>()
             .add_message::<BenchmarkFinished>()
@@ -147,6 +151,9 @@ impl Plugin for StagePlugin {
         match &opts.content {
             StageContent::Lookdev => {
                 app.insert_resource(SceneDef::load_lookdev());
+            }
+            StageContent::Parts(state) => {
+                app.add_plugins(crate::browser::BrowserPlugin(state.clone()));
             }
             StageContent::Stress(n) => {
                 app.insert_resource(StressBoxes(*n));
@@ -192,6 +199,7 @@ fn setup_stage(
     mut std_mats: ResMut<Assets<StandardMaterial>>,
     mut grid_mats: ResMut<Assets<GridMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    mut lib: ResMut<PartLibrary>,
     lighting: Res<LightingConfig>,
     grid: Res<GridSettings>,
     quality: Res<ActiveQuality>,
@@ -222,6 +230,7 @@ fn setup_stage(
             meshes: &mut meshes,
             materials: &mut std_mats,
             parts: &mut parts,
+            lib: &mut lib,
             micro_on: quality.0.settings().micro_surface && !disable.micro_normal,
         };
         if let Some(scene) = scene {
@@ -525,6 +534,13 @@ fn perf_log(
             }
         }
     }
+    // Nested passes (names like `a/b`, children of a pass already counted) stay out of totals and
+    // the text summary, so the same work is not counted twice. `perf.json` keeps them, flagged.
+    let gpu_total: f64 = gpu
+        .iter()
+        .filter(|(p, _)| !p.contains('/'))
+        .map(|(_, v)| v)
+        .sum();
     gpu.sort_by(|a, b| b.1.total_cmp(&a.1));
     cpu.sort_by(|a, b| b.1.total_cmp(&a.1));
     println!(
@@ -548,18 +564,27 @@ fn perf_log(
             }
         );
     } else {
-        for (p, v) in gpu.iter().take(12) {
+        println!(
+            "perf: gpu_total_ms={gpu_total:.2} frame_ms={avg:.2} (top-level passes only; nested a/b passes are children and excluded)"
+        );
+        for (p, v) in gpu.iter().filter(|(p, _)| !p.contains('/')).take(12) {
             println!("perf: gpu {v:6.2} ms  {p}");
         }
     }
     let list = |v: &[(String, f64)]| {
         v.iter()
-            .map(|(p, ms)| format!("{{\"pass\":{},\"ms\":{ms:.4}}}", json_str(p)))
+            .map(|(p, ms)| {
+                format!(
+                    "{{\"pass\":{},\"ms\":{ms:.4},\"nested\":{}}}",
+                    json_str(p),
+                    p.contains('/')
+                )
+            })
             .collect::<Vec<_>>()
             .join(",")
     };
     let json = format!(
-        "{{\"adapter\":{},\"backend\":{},\"device_type\":{},\"driver\":{},\"preset\":{},\"resolution\":[{},{}],\"present_mode\":{},\"disabled\":[{}],\"frames\":{n},\"frame_ms\":{{\"mean\":{avg:.3},\"p50\":{p50:.3},\"p95\":{p95:.3},\"p99\":{p99:.3}}},\"fps\":{fps:.2},\"cpu_ms\":{{\"main\":{:.3},\"render\":{:.3}}},\"gpu_timestamps\":{},\"gpu_passes\":[{}],\"cpu_passes\":[{}],\"drawn\":{},\"unique_meshes\":{},\"unique_materials\":{}}}\n",
+        "{{\"adapter\":{},\"backend\":{},\"device_type\":{},\"driver\":{},\"preset\":{},\"resolution\":[{},{}],\"present_mode\":{},\"disabled\":[{}],\"frames\":{n},\"frame_ms\":{{\"mean\":{avg:.3},\"p50\":{p50:.3},\"p95\":{p95:.3},\"p99\":{p99:.3}}},\"fps\":{fps:.2},\"cpu_ms\":{{\"main\":{:.3},\"render\":{:.3}}},\"gpu_total_ms\":{gpu_total:.3},\"gpu_timestamps\":{},\"gpu_passes\":[{}],\"cpu_passes\":[{}],\"drawn\":{},\"unique_meshes\":{},\"unique_materials\":{}}}\n",
         json_str(&adapter),
         json_str(&backend),
         json_str(&device_type),

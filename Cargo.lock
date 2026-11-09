@@ -459,11 +459,17 @@ dependencies = [
 [[package]]
 name = "axl-parts"
 version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "axl-render"
 version = "0.1.0"
 dependencies = [
+ "axl-parts",
  "bevy",
  "ron",
  "serde",
@@ -5575,6 +5581,7 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axl-parts",
  "clap",
  "sha2",
 ]

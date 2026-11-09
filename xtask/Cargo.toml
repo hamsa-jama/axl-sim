@@ -12,3 +12,4 @@ publish.workspace = true
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 sha2 = "0.10"
+axl-parts = { path = "../crates/axl-parts" }

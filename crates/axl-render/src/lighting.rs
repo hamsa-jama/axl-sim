@@ -218,41 +218,148 @@ impl LightingConfig {
 // Procedural studio environment
 // ---------------------------------------------------------------------------------------
 
+/// A rectangular softbox seen from the studio centre.
+///
+/// `az` and `el` (degrees, AXL azimuth from +X and elevation) give the panel's centre
+/// direction; `half_w` and `half_h` are half-extents on the tangent plane (a panel of
+/// half-width 0.5 spans about 53 degrees); `power` is the relative radiance.
+struct Softbox {
+    az: f32,
+    el: f32,
+    half_w: f32,
+    half_h: f32,
+    power: f32,
+    /// 0 is a flat panel; 1 fades the lower edge to nothing, like a graduated softbox.
+    grad: f32,
+    tint: Vec3,
+}
+
+/// The studio's panels: a large overhead key, tall side fills at both sides and a rim strip
+/// behind the set. Tall panels reach down to the floor so vertical faces reflect them too.
+/// A vertical strip light (light-tent style), floor to about 50 degrees, centred on azimuth `az`.
+/// Eight of them around the set give every vertical face a softbox to mirror whatever its
+/// orientation, with dark gaps between the strips so reflections have crisp edges to roll along.
+const fn strip(az: f32, power: f32) -> Softbox {
+    Softbox {
+        az,
+        el: 22.0,
+        half_w: 0.06,
+        half_h: 0.50,
+        power,
+        grad: 0.5,
+        tint: Vec3::new(1.0, 0.99, 0.97),
+    }
+}
+
+const SOFTBOXES: [Softbox; 12] = [
+    strip(22.0, 150.0),
+    strip(67.0, 150.0),
+    strip(157.0, 150.0),
+    strip(-23.0, 150.0),
+    strip(-68.0, 150.0),
+    strip(-158.0, 150.0),
+    strip(112.0, 150.0),
+    strip(-113.0, 150.0),
+    // Large overhead key, slightly towards the key light's side.
+    Softbox {
+        az: -50.0,
+        el: 72.0,
+        half_w: 0.35,
+        half_h: 0.26,
+        power: 260.0,
+        grad: 0.7,
+        tint: Vec3::new(1.0, 0.97, 0.92),
+    },
+    // Side fill, right of camera, floor to high.
+    Softbox {
+        az: 100.0,
+        el: 12.0,
+        half_w: 0.10,
+        half_h: 0.60,
+        power: 80.0,
+        grad: 0.4,
+        tint: Vec3::new(0.92, 0.96, 1.0),
+    },
+    // Side fill, left of camera.
+    Softbox {
+        az: -125.0,
+        el: 12.0,
+        half_w: 0.10,
+        half_h: 0.60,
+        power: 55.0,
+        grad: 0.4,
+        tint: Vec3::new(1.0, 0.99, 0.97),
+    },
+    // Rim / back strip, wide and low.
+    Softbox {
+        az: 180.0,
+        el: 30.0,
+        half_w: 0.90,
+        half_h: 0.10,
+        power: 260.0,
+        grad: 0.8,
+        tint: Vec3::new(1.0, 1.0, 1.0),
+    },
+];
+
+/// Unit vector (Bevy world space, +Y up) for an AXL azimuth and elevation in degrees.
+fn dir_from_az_el(az_deg: f32, el_deg: f32) -> Vec3 {
+    let (az, el) = (az_deg.to_radians(), el_deg.to_radians());
+    // AXL (x, y, z) maps to Bevy (x, z, -y).
+    Vec3::new(el.cos() * az.cos(), el.sin(), -el.cos() * az.sin())
+}
+
+/// Coverage (0..=1) of one softbox in direction `d`, with an edge about 1.2% of the panel size wide.
+fn softbox_mask(b: &Softbox, d: Vec3) -> f32 {
+    let c = dir_from_az_el(b.az, b.el);
+    let along = d.dot(c);
+    if along <= 0.05 {
+        return 0.0;
+    }
+    // Panel axes: horizontal tangent and the vertical tangent that completes the frame.
+    let u = Vec3::Y.cross(c).normalize_or_zero();
+    let u = if u == Vec3::ZERO { Vec3::X } else { u };
+    let v = c.cross(u).normalize_or_zero();
+    let (x, y) = (d.dot(u) / along, d.dot(v) / along);
+    let soft = 0.012;
+    let edge =
+        |p: f32, half: f32| 1.0 - smooth((p.abs() - half) / (half * soft * 6.0 + 1e-4) + 0.5);
+    let t = (y / b.half_h * 0.5 + 0.5).clamp(0.0, 1.0);
+    edge(x, b.half_w) * edge(y, b.half_h) * (1.0 - b.grad + b.grad * t)
+}
+
 /// Relative radiance of the studio seen along `dir` (Bevy world space, +Y up).
 ///
-/// A neutral grey room with a large key softbox, a smaller fill softbox, a
-/// ceiling strip light and a lighter floor bounce. Values are relative: the
-/// camera's `EnvironmentMapLight` intensity scales them to cd/m2.
+/// A dim neutral room with a white floor bounce, lit by the [`SOFTBOXES`]. Values are
+/// relative: the camera's `GeneratedEnvironmentMapLight` intensity scales them to cd/m2.
 pub fn studio_radiance(dir: Vec3) -> Vec3 {
     let d = dir.normalize_or_zero();
-    // Base room: darker walls at the horizon, brighter ceiling, floor bounce.
     let sky = d.y.clamp(-1.0, 1.0);
+    // Walls and ceiling are dim; the floor is a bright bounce that fades to dark below.
     let base = if sky >= 0.0 {
-        0.22 + 0.25 * sky
+        0.05 + 0.05 * sky
     } else {
-        0.20 + 0.10 * (-sky)
+        0.30 - 0.14 * (-sky)
     };
     let mut c = Vec3::splat(base);
-
-    // Softboxes: angular rectangles given by centre azimuth/elevation and half-extents (degrees).
-    let boxes: [(f32, f32, f32, f32, f32, Vec3); 3] = [
-        // Key: front-left, high.
-        (-50.0, 42.0, 22.0, 16.0, 14.0, Vec3::new(1.0, 0.97, 0.92)),
-        // Fill: back-right, lower and dimmer.
-        (130.0, 25.0, 25.0, 12.0, 4.0, Vec3::new(0.92, 0.96, 1.0)),
-        // Strip light overhead.
-        (20.0, 78.0, 40.0, 7.0, 7.0, Vec3::new(1.0, 1.0, 1.0)),
-    ];
-    // Azimuth in the AXL frame (Bevy +Z is AXL -Y), so softboxes line up with the key light.
-    let az = (-d.z).atan2(d.x).to_degrees();
-    let el = d.y.clamp(-1.0, 1.0).asin().to_degrees();
-    for (b_az, bel, haz, hel, strength, tint) in boxes {
-        let mut daz = (az - b_az + 540.0).rem_euclid(360.0) - 180.0;
-        // Azimuth extents shrink towards the pole so the box keeps a rectangular look.
-        daz *= bel.to_radians().cos().max(0.2);
-        let edge = |x: f32, half: f32| 1.0 - smooth((x.abs() - half) / 3.0);
-        let m = edge(daz, haz * bel.to_radians().cos().max(0.2)) * edge(el - bel, hel);
-        c += tint * strength * m;
+    // A light-tent dome: radiance climbs smoothly from the horizon to 50 degrees elevation and
+    // eases off overhead. Flat faces see a gradient across their width and rounded edges sweep
+    // through it, which is what makes bevels read as moulded plastic.
+    let el = sky.asin().to_degrees();
+    let dome = smooth((el - 18.0) / 28.0) * (1.0 - 0.7 * smooth((el - 60.0) / 25.0));
+    // Brighter towards the key side (azimuth -50 degrees) so the three faces seen from the front
+    // differ in brightness.
+    let az = (-d.z).atan2(d.x);
+    let side = 0.65 + 0.35 * (az + 50f32.to_radians()).cos();
+    c += Vec3::new(1.0, 0.99, 0.97) * 60.0 * dome * side;
+    // A bright ring panel at 27..39 degrees elevation with soft edges, all the way round. Every
+    // face seen from a typical 25 to 45 degree camera mirrors one of its edges, so flat tops and
+    // sides show a defined softbox reflection that slides as the camera orbits.
+    let band = smooth((el - 27.0) / 3.0) * (1.0 - smooth((el - 37.0) / 3.0));
+    let lobe = (0.5 + 0.5 * (2.0 * (az + 50f32.to_radians())).cos()).powi(2);
+    c += Vec3::new(1.0, 0.99, 0.97) * 250.0 * band * (0.1 + 0.9 * lobe);
+    for b in &SOFTBOXES {
+        c += b.tint * b.power * softbox_mask(b, d);
     }
     c
 }

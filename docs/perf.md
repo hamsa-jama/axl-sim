@@ -87,6 +87,9 @@ Pass when `fps` is at least 60 and `p99_ms` is below about 25 on a mid-range dis
 | --- | --- | --- | --- | --- | --- | --- |
 | before fixes | laptop-uhd620 | High | 13.5 | | about 100 | not applicable (integrated GPU) |
 | before fixes | laptop-uhd620 | Low | 22.3 | | 58 | no (target 30) |
+| after fixes (main 1d4a26a, 1920x1000, 200 boxes, 10 s) | laptop-uhd620 | High | 14.1 | | 85.5 | below target on an integrated GPU; expected, High targets a discrete GPU |
+| after fixes (same run) | laptop-uhd620 | Medium | 22.7 | | 47.6 | below target on an integrated GPU; expected, Medium targets an entry discrete GPU |
+| after fixes (same run) | laptop-uhd620 | Low | 40.6 | | 27.5 | pass (target 30 fps) |
 | (not run yet) | mid-range discrete | High | | | | |
 
 ## Other checks to run once
@@ -95,3 +98,61 @@ Pass when `fps` is at least 60 and `p99_ms` is below about 25 on a mid-range dis
 - First-launch benchmark from an empty data folder:
   `AXL_DATA_DIR=/tmp/axl-empty cargo run -p axl-app --release -- --exit-after-benchmark`, then read
   `/tmp/axl-empty/settings.ron`. The cut-offs in `assets/render/quality.ron` are `placeholder: calibrate`.
+
+## Post-fix measurement on the reference laptop
+
+laptop-uhd620, main at 1d4a26a, `--stress-boxes 200 --perf-seconds 10`, 1920x1000. Biggest GPU passes (ms):
+
+| Preset | fps | p99 ms | opaque | SSAO | TAA | bloom | SMAA | FXAA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| High | 14.1 | 85.5 | 38.5 | 13.5 | 7.3 | 3.8 | | |
+| Medium | 22.7 | 47.6 | 20.8 | 9.4 | | 4.1 | 2.3 | |
+| Low | 40.6 | 27.5 | 20.7 | | | | | 1.6 |
+
+Low passes. High and Medium are below their targets on this integrated GPU, which the spec expects.
+First launch from an empty folder logged "76.3 ms per frame (13.1 fps), chose Low" and wrote
+`settings.ron`. The environment line reads "filtered once and frozen". The opaque pass is the largest
+single cost on every preset (about 20.7 ms on Low and Medium); attribution runs with `--disable` are
+pending from the owner.
+
+## Review of opaque-pass cost (code reading, no changes made)
+
+The owner measured about 20.7 ms in the opaque pass on both Low and Medium, so it does not depend on
+the effects those presets differ in. Notes from reading the code; none of these is a measured cause.
+`--disable grid` and `--disable shadows` runs on Low will say which matters.
+
+- **Floor fragment cost.** The 200 m floor covers most of the screen, so most fragments in the opaque
+  pass are floor fragments, each running the full `StandardMaterial` PBR path (environment map
+  sampling, shadow lookup, directional light) plus `grid_floor.wesl`.
+- **Grid shader per fragment.** Three `family()` calls (minor, major, bold), each doing its own
+  `fwidth` of a vec2 and a `fract`/`abs`; one more `fwidth` for the axes; `distance()` for the fade;
+  stud dots and measure markers sit behind uniform branches and cost nothing when off. That is
+  roughly 4 derivative pairs and a few dozen ALU operations: small next to a PBR fragment, but
+  it is paid by every floor pixel. Possible savings if the attribution run points here: compute
+  `fwidth(uv)` once and scale it by 1/spacing (the three families differ only by a constant factor),
+  and skip a family when its `spacing_fade` is already 0 or the distance fade is 0.
+- **Shadows on Low.** One cascade, 1024 px, `Hardware2x2` filtering: one shadow-map lookup per
+  fragment. This is already the cheapest setting; the cascade count is not the cost on Low. Medium
+  uses 2 cascades with Gaussian filtering only when `soft`, which Medium does not set.
+- **Fill rate.** At 1920x1000 the pass touches about 1.9 million fragments, plus depth pre-pass
+  overdraw from the floor under every box. The render-scale 0.75 on Low would cut fragments by 44%
+  if it were applied (decision 0006 defers it).
+
+## Stress-scene materials, HDR on Low, render scale (M3 follow-ups)
+
+- **Materials in the stress scene.** The 200 boxes use 9 colours and the quantised per-part variation
+  (3 roughness x 3 brightness levels). That is at most 9 materials per colour and 81 overall; the
+  owner's `unique_materials=69` is a normal draw from that set, so the scene already batches the way
+  real robots will. `scene::quantised_variation` has a unit test that no uid gives more than 9 variations.
+- **`hdr true` on Low.** The camera was spawned with the `Hdr` component, and the start-up log read it
+  before the preset (applied through deferred commands) removed it, so the log lied for a few frames.
+  `Hdr` is now added only by the preset, and the log waits 4 frames. Measured under llvmpipe the Low log
+  line now reads `hdr false`.
+- **Low render scale 0.75 is still not applied.** Read of Bevy 0.20.1: `MainPassResolutionOverride` only
+  shrinks the main pass viewport inside a full-size texture and "does not affect post processing", so the
+  built-in tonemapping, FXAA and upscaling passes would still read the full texture; only DLSS-style
+  upscalers resample it. A general version needs the camera to render into an image of 0.75 size and a
+  second camera to blit it to the window with egui on the second camera, and the cursor, picking and
+  floor ray code to map window positions into the smaller target. That touches the camera input, picking
+  and egui, and cannot be verified without a real GPU. It is left for after the owner's `--disable`
+  attribution shows whether fill rate is the problem.

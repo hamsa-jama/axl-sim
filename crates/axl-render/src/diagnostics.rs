@@ -334,6 +334,7 @@ pub fn log_render_setup(
     cams: Query<(Has<bevy::camera::Hdr>, Option<&Msaa>), With<crate::camera_rig::ViewCamera>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut done: Local<bool>,
+    mut frames: Local<u32>,
 ) {
     if *done {
         return;
@@ -341,6 +342,11 @@ pub fn log_render_setup(
     let Ok((hdr, msaa)) = cams.single() else {
         return;
     };
+    // Wait a few frames so the preset (applied through deferred commands) is in effect.
+    *frames += 1;
+    if *frames < 4 {
+        return;
+    }
     *done = true;
     if let Ok(w) = windows.single() {
         info!(

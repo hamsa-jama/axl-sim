@@ -10,14 +10,17 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod browser;
 pub mod camera_input;
 pub mod camera_rig;
 pub mod diagnostics;
 pub mod frames;
 pub mod grid;
 pub mod grid_math;
+pub mod hdri;
 pub mod lighting;
 pub mod materials_data;
+pub mod parts;
 pub mod placeholder;
 pub mod quality;
 pub mod scene;

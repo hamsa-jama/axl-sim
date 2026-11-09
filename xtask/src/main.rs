@@ -28,6 +28,8 @@ enum Command {
     SdkCheck,
     /// Build the release package for this OS (arrives with M10).
     Package,
+    /// Write assets/parts/*.ron from the generator in axl-parts.
+    GenParts,
     /// Prefilter the HDRI into KTX2 cubemaps, only if M2 needs it.
     Envmap,
 }
@@ -52,6 +54,11 @@ fn main() -> Result<()> {
         Command::Validate => validate(),
         Command::SdkCheck => not_yet("sdk-check", "M7"),
         Command::Package => not_yet("package", "M10"),
+        Command::GenParts => {
+            let n = axl_parts::catalog::write_builtin(&workspace_root().join("assets/parts"))?;
+            println!("wrote {n} part files to assets/parts");
+            Ok(())
+        }
         Command::Envmap => not_yet("envmap", "M2"),
     }
 }

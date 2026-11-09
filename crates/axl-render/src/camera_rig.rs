@@ -144,8 +144,8 @@ fn studio_bloom(intensity: f32) -> Bloom {
         intensity,
         composite_mode: BloomCompositeMode::Additive,
         prefilter: BloomPrefilter {
-            threshold: 1.0,
-            threshold_softness: 0.6,
+            threshold: 1.3,
+            threshold_softness: 0.2,
         },
         ..Bloom::NATURAL
     }
@@ -181,7 +181,7 @@ pub fn spawn_view_camera(
                 ..default()
             }),
             orbit_transform(home),
-            Hdr,
+            // `Hdr` is added by `apply_quality` only for presets with bloom (decision 0006).
             Msaa::Off,
             if disable.tonemap {
                 Tonemapping::None
@@ -211,7 +211,7 @@ pub fn spawn_view_camera(
             ..default()
         });
     } else {
-        let env = images.add(crate::lighting::studio_cubemap(256));
+        let env = images.add(crate::hdri::load_studio_cubemap(256));
         commands.entity(cam).insert(GeneratedEnvironmentMapLight {
             environment_map: env,
             intensity: lighting.environment.intensity,
@@ -472,9 +472,9 @@ pub fn apply_quality(
     if q.contact_shadows {
         // Distances are in metres; the defaults (30 cm rays) are far too long for small parts.
         e.insert(ContactShadows {
-            linear_steps: 16,
-            thickness: 0.004,
-            length: 0.03,
+            linear_steps: 24,
+            thickness: 0.005,
+            length: 0.04,
         });
     }
     if q.ao != AoLevel::Off {
@@ -487,7 +487,7 @@ pub fn apply_quality(
         e.insert(ScreenSpaceAmbientOcclusion {
             quality_level: level,
             radius: 0.012,
-            constant_object_thickness: 0.006,
+            constant_object_thickness: 0.004,
         });
     }
     e.insert(if q.shadows.soft && q.aa == AaMode::Taa {
