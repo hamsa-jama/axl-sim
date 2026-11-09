@@ -236,7 +236,30 @@ struct Softbox {
 
 /// The studio's panels: a large overhead key, tall side fills at both sides and a rim strip
 /// behind the set. Tall panels reach down to the floor so vertical faces reflect them too.
-const SOFTBOXES: [Softbox; 4] = [
+/// A vertical strip light (light-tent style), floor to about 50 degrees, centred on azimuth `az`.
+/// Eight of them around the set give every vertical face a softbox to mirror whatever its
+/// orientation, with dark gaps between the strips so reflections have crisp edges to roll along.
+const fn strip(az: f32, power: f32) -> Softbox {
+    Softbox {
+        az,
+        el: 22.0,
+        half_w: 0.06,
+        half_h: 0.50,
+        power,
+        grad: 0.5,
+        tint: Vec3::new(1.0, 0.99, 0.97),
+    }
+}
+
+const SOFTBOXES: [Softbox; 12] = [
+    strip(22.0, 300.0),
+    strip(67.0, 300.0),
+    strip(157.0, 300.0),
+    strip(-23.0, 300.0),
+    strip(-68.0, 300.0),
+    strip(-158.0, 300.0),
+    strip(112.0, 300.0),
+    strip(-113.0, 300.0),
     // Large overhead key, slightly towards the key light's side.
     Softbox {
         az: -50.0,
@@ -314,11 +337,17 @@ pub fn studio_radiance(dir: Vec3) -> Vec3 {
     let sky = d.y.clamp(-1.0, 1.0);
     // Walls and ceiling are dim; the floor is a bright bounce that fades to dark below.
     let base = if sky >= 0.0 {
-        0.16 + 0.12 * sky
+        0.05 + 0.05 * sky
     } else {
-        0.42 - 0.20 * (-sky)
+        0.30 - 0.14 * (-sky)
     };
     let mut c = Vec3::splat(base);
+    // A light-tent dome: radiance climbs smoothly from the horizon to 50 degrees elevation and
+    // eases off overhead. Flat faces see a gradient across their width and rounded edges sweep
+    // through it, which is what makes bevels read as moulded plastic.
+    let el = sky.asin().to_degrees();
+    let dome = smooth((el - 8.0) / 42.0) * (1.0 - 0.7 * smooth((el - 60.0) / 25.0));
+    c += Vec3::new(1.0, 0.99, 0.97) * 70.0 * dome;
     for b in &SOFTBOXES {
         c += b.tint * b.power * softbox_mask(b, d);
     }

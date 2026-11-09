@@ -37,7 +37,7 @@ pub const ROUGHNESS_JITTER: f32 = 0.03;
 /// Maximum brightness change from the per-part variation (1.5%).
 pub const BRIGHTNESS_JITTER: f32 = 0.015;
 /// Strength of the micro-surface normal map.
-pub const MICRO_NORMAL_STRENGTH: f32 = 0.05;
+pub const MICRO_NORMAL_STRENGTH: f32 = 0.025;
 /// Side of the micro-surface texture in pixels.
 pub const MICRO_NORMAL_SIZE: usize = 256;
 

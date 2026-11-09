@@ -144,8 +144,8 @@ fn studio_bloom(intensity: f32) -> Bloom {
         intensity,
         composite_mode: BloomCompositeMode::Additive,
         prefilter: BloomPrefilter {
-            threshold: 1.0,
-            threshold_softness: 0.6,
+            threshold: 1.3,
+            threshold_softness: 0.2,
         },
         ..Bloom::NATURAL
     }
