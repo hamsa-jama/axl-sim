@@ -904,7 +904,7 @@ One Cargo workspace builds everything, and `cargo xtask` handles the tasks Cargo
 
 Each release attaches the validation report. Reference solutions in `missions/solutions/` are used by CI but never shipped in packages.
 
-**Branches.** Build each milestone on a branch `milestone/mNN`. Merge it into `main` only when its acceptance checks pass, then tag `mNN-done`.
+**Branches.** Build each milestone on a branch `milestone/mNN`. Merge it into `main` only when its acceptance checks pass, and mark it accepted in `docs/STATUS.md`. Also create the tag `mNN-done`. If pushing the tag is refused, leave it local, list the push command as an owner check, and carry on: the merge commit and the status row are what count.
 
 ## Engineering standards
 
@@ -946,7 +946,7 @@ The codebase must stay warning-free, panic-free on user input, and limited to an
 
 ## Milestones
 
-Version 1 is 11 milestones, M0 to M10, built strictly in order. Each one ends with checks a machine or the owner can verify. Do not start a milestone until the previous one is merged into `main` and tagged.
+Version 1 is 11 milestones, M0 to M10, built strictly in order. Each one ends with checks a machine or the owner can verify. Do not start a milestone until the previous one is merged into `main` and marked accepted in `docs/STATUS.md`.
 
 | Milestone | Scope | Accepted when |
 | --- | --- | --- |
