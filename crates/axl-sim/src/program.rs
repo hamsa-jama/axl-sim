@@ -403,8 +403,7 @@ pub(crate) fn sim_thread_with_program(
                 s.publish(None);
             }
         }
-        let started = inner.borrow().send(SimEvent::Started);
-        let _ = started;
+        inner.borrow().send(SimEvent::Started);
         match Controller::new(&program.wasm, SimRobot(inner.clone()), &program.host) {
             Ok(mut c) => {
                 let end = c.run();
