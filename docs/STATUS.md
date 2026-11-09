@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M3 is accepted and merged into `main` (see the merge commit below). Next: M4 Builder (SPEC.md "Builder"): assembly, snapping, connection derivation, validation, undo and redo, `.axlbot` save and load, the two starter robots. Open M3 items for the owner or a later pass: approve the look on a real GPU (O7); Low render scale 0.75 is not applied (see `docs/perf.md`, last section); SSAO noise on glossy parts (decision 0007); floor shader cost awaits the owner's `--disable` measurements.
+M3 is accepted and merged into `main` (merge commit da393ab). Next: M4 Builder (SPEC.md "Builder"): assembly, snapping, connection derivation, validation, undo and redo, `.axlbot` save and load, the two starter robots. Open M3 items for the owner or a later pass: approve the look on a real GPU (O7); Low render scale 0.75 is not applied (see `docs/perf.md`, last section); SSAO noise on glossy parts (decision 0007); floor shader cost awaits the owner's `--disable` measurements.
 
 ## Owner checks
 
@@ -34,7 +34,7 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | O6 | M2 | Approve the look | Open `docs/screenshots/lookdev-high-1920x1080.png`, then on a real GPU run `cargo run -p axl-app --release -- --lookdev` and compare. Optional: swap the procedural studio cubemap for a Poly Haven HDRI (see decision 0005). |
 | O2 | M0 | The window opens on a real GPU | On a desktop machine: `cargo xtask fetch-mujoco && cargo run -p axl-app --release`. A dark window titled "AXL" with a status bar reading "AXL 0.1.0" should open and close normally. |
 | O7 | M3 | Approve the M3 look on a real GPU | Open `docs/screenshots/m3-lookdev-after-realism-high-1920x1080.png` and the two 1280x720 "after" images next to the "before" images, then on a real GPU run `cargo run -p axl-app --release -- --lookdev --quality high` and compare. Look for: softbox reflections on the red brick top and sides, highlights on bevels and stud rims, firm grounding. Known problem: SSAO noise (decision 0007). Also try `--parts all` and click a part. |
-| O8 | M3 | Push the `m03-done` tag (sandbox push refused) | `git fetch origin && git tag -a m03-done -m "M3 parts accepted" <merge commit on main> && git push origin m03-done`. The merge commit hash is in the "Where I stopped" section. |
+| O8 | M3 | Push the `m03-done` tag (sandbox push refused) | `git fetch origin && git tag -a m03-done -m "M3 parts accepted" <merge commit on main> && git push origin m03-done`. `da393ab` is the M3 merge commit on `main`. |
 | O9 | M3 | Add a Poly Haven studio HDRI (optional, recommended) | 1. Open https://polyhaven.com/hdris/studio and pick a neutral indoor studio HDRI (CC0, for example "Studio Small 08"). 2. Download the 2K `.hdr` file. 3. Save it as `assets/render/studio.hdr` in the repository (it is loaded at start-up if present; a file that fails to load falls back to the procedural studio and logs why). 4. Run `cargo run -p axl-app --release -- --lookdev` and compare. 5. Commit the file only if the licence note is added to `assets/render/README`-style text in the commit message (CC0 needs no attribution). |
 
 ## Development notes
