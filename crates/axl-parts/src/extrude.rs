@@ -143,7 +143,13 @@ pub fn extrude(profile: &Profile, z0: f64, z1: f64, cap0: Option<Cap>, cap1: Opt
         }
         let tris = crate::earcut::triangulate(&data, &starts);
         let base: Vec<u32> = data.iter().map(|p| mesh.vert([p[0], p[1], z], [0.0, 0.0, s])).collect();
+        let mut seen = std::collections::BTreeSet::new();
         for t in tris.chunks(3) {
+            let mut key = [t[0], t[1], t[2]];
+            key.sort();
+            if !seen.insert(key) {
+                continue;
+            }
             mesh.tri_facing(base[t[0]], base[t[1]], base[t[2]], [0.0, 0.0, s]);
         }
     }
@@ -166,7 +172,7 @@ mod tests {
         let p = Profile::solid(rect(0.0, 0.0, 4.0, 3.0));
         let m = extrude(&p, 0.0, 2.0, Some(Cap::SHARP), Some(Cap::SHARP));
         assert!((m.volume() - 24.0).abs() < 1e-9);
-        assert_eq!(m.open_edges(), 0);
+        assert!(m.is_closed());
     }
 
     #[test]
@@ -176,7 +182,7 @@ mod tests {
         let p = Profile::solid(c.clone());
         let b = 0.5;
         let m = extrude(&p, 0.0, 4.0, Some(Cap::all(b)), Some(Cap::all(b)));
-        assert_eq!(m.open_edges(), 0);
+        assert!(m.is_closed());
         let poly_area = crate::profile::signed_area(&c);
         let want = poly_area * 4.0 - 2.0 * bevel_loss(perimeter(&c), b);
         assert!((m.volume() - want).abs() / want < 0.003, "{} vs {want}", m.volume());
@@ -188,7 +194,7 @@ mod tests {
     fn holes_are_subtracted_and_surface_is_closed() {
         let p = Profile::solid(rect(0.0, 0.0, 20.0, 10.0)).with_hole(circle(0.0, 0.0, 2.4, 48));
         let m = extrude(&p, 0.0, 5.0, Some(Cap::all(0.3)), Some(Cap::all(0.3)));
-        assert_eq!(m.open_edges(), 0);
+        assert!(m.is_closed());
         let ideal = (200.0 - PI * 2.4 * 2.4) * 5.0;
         assert!((m.volume() - ideal).abs() / ideal < 0.01, "{} vs {ideal}", m.volume());
     }

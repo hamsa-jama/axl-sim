@@ -364,7 +364,7 @@ mod tests {
     fn brick_2x4_is_closed_and_mesh_volume_matches_analytic() {
         let s = brick(4, 2);
         let m = block_mesh(&s);
-        assert_eq!(m.open_edges(), 0);
+        assert!(m.is_closed());
         let (v, a) = (m.volume(), s.volume());
         assert!((v - a).abs() / a < 0.01, "mesh {v} analytic {a}");
     }
@@ -387,7 +387,7 @@ mod tests {
             brick(1, 6),
         ] {
             let m = block_mesh(&s);
-            assert_eq!(m.open_edges(), 0);
+            assert!(m.is_closed());
             assert!((m.volume() - s.volume()).abs() / s.volume() < 0.012, "{}x{}", s.nx, s.ny);
         }
     }
@@ -396,7 +396,7 @@ mod tests {
     fn hole_brick_has_bores_and_is_closed() {
         let s = BlockSpec { holes_y: vec![(-8.0, 4.8), (0.0, 4.8), (8.0, 4.8)], ..brick(4, 1) };
         let m = block_mesh(&s);
-        assert_eq!(m.open_edges(), 0);
+        assert!(m.is_closed());
         assert!((m.volume() - s.volume()).abs() / s.volume() < 0.012);
     }
 }

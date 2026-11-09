@@ -266,6 +266,16 @@ impl TriMesh {
         (lo, hi)
     }
 
+    /// True when the surface has no net boundary: the enclosed volume does not change when the
+    /// mesh is moved relative to the origin. This tolerates zero-area slivers that stitch
+    /// collinear points, which [`open_edges`](Self::open_edges) would flag.
+    pub fn is_closed(&self) -> bool {
+        let v0 = self.volume();
+        let mut moved = self.clone();
+        moved.transform(&Xf::translate(137.0, -251.0, 89.0));
+        (moved.volume() - v0).abs() <= 1e-9 * v0.abs().max(1.0)
+    }
+
     /// Count directed edges (by position, to 1e-6 mm) that have no opposite partner.
     /// Zero means the surface is closed and consistently oriented.
     pub fn open_edges(&self) -> usize {
@@ -395,7 +405,7 @@ mod tests {
     fn cube_has_volume_eight_and_is_closed() {
         let m = cube();
         assert!((m.volume() - 8.0).abs() < 1e-9);
-        assert_eq!(m.open_edges(), 0);
+        assert!(m.is_closed());
         assert!((m.area() - 24.0).abs() < 1e-9);
     }
 

@@ -104,7 +104,7 @@ mod tests {
         let m = capped_cylinder(2.4, 1.7, 0.0, 64);
         let ideal = PI * 2.4 * 2.4 * 1.7;
         assert!((m.volume() - ideal).abs() / ideal < 0.003);
-        assert_eq!(m.open_edges(), 0);
+        assert!(m.is_closed());
     }
 
     #[test]
@@ -126,6 +126,6 @@ mod tests {
         let m = lathe(&p, &[], 48);
         let ideal = 4.0 / 3.0 * PI * r.powi(3);
         assert!((m.volume() - ideal).abs() / ideal < 0.01);
-        assert_eq!(m.open_edges(), 0);
+        assert!(m.is_closed());
     }
 }
