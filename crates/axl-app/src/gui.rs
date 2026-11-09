@@ -15,7 +15,7 @@ use axl_render::{BenchmarkFinished, RenderOptions, StageContent, StagePlugin};
 use bevy_egui::input::EguiWantsInput;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 
-use crate::browser_ui::browser_panel;
+use crate::browser_ui::{LeftInset, browser_panel};
 use crate::cli::Args;
 use crate::settings::Settings;
 
@@ -184,6 +184,7 @@ pub fn run(args: &Args) -> AppExit {
         invert_orbit: current.invert_orbit,
     })
     .insert_resource(SettingsStore { current, path })
+    .init_resource::<LeftInset>()
     .add_plugins(StagePlugin(options))
     .add_systems(
         Update,
@@ -194,13 +195,18 @@ pub fn run(args: &Args) -> AppExit {
             remember_benchmark,
         ),
     )
-    .add_systems(
-        EguiPrimaryContextPass,
-        (control_bar, status_bar, gizmo_overlay).chain(),
-    )
+    .add_systems(EguiPrimaryContextPass, (control_bar, status_bar).chain())
     .add_systems(
         EguiPrimaryContextPass,
         browser_panel.run_if(resource_exists::<axl_render::browser::BrowserState>),
+    )
+    // The gizmo sits in what the panels leave free, so it never covers one.
+    .add_systems(
+        EguiPrimaryContextPass,
+        gizmo_overlay
+            .after(control_bar)
+            .after(status_bar)
+            .after(browser_panel),
     );
     app.run()
 }
@@ -401,13 +407,15 @@ fn status_bar(
 fn gizmo_overlay(
     mut contexts: EguiContexts,
     cams: Query<&GlobalTransform, With<ViewCamera>>,
+    inset: Res<LeftInset>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let Ok(cam) = cams.single() else {
         return Ok(());
     };
+    // Stay clear of the left side panel (part browser, builder palette) and the status bar.
     let view = ctx.viewport_rect();
-    let origin = egui::pos2(view.left() + 64.0, view.bottom() - 64.0 - 28.0);
+    let origin = egui::pos2(view.left() + inset.0 + 64.0, view.bottom() - 64.0 - 28.0);
     let len = 40.0;
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,

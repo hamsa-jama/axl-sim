@@ -7,6 +7,10 @@ use axl_render::materials_data::PART_COLORS;
 use axl_render::parts::PartLibrary;
 use bevy_egui::{EguiContexts, egui};
 
+/// Width of the left side panel in egui points, so overlays can stay clear of it.
+#[derive(Resource, Default, Clone, Copy)]
+pub struct LeftInset(pub f32);
+
 /// Stats of the selected part, computed once per selection.
 #[derive(Default)]
 pub struct StatsCache(Option<(String, PartStats)>);
@@ -18,6 +22,7 @@ pub fn browser_panel(
     mut lib: ResMut<PartLibrary>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut cache: Local<StatsCache>,
+    mut inset: ResMut<LeftInset>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     // Edit a copy so the resource is only marked changed when something really changed.
@@ -35,7 +40,7 @@ pub fn browser_panel(
         .filter(|d| matches_query(d, &s.query))
         .map(|d| (d.id.0.clone(), d.name.clone(), format!("{:?}", d.category)))
         .collect();
-    egui::Panel::left("part_browser")
+    let panel = egui::Panel::left("part_browser")
         .default_size(280.0)
         .show(&mut root, |ui| {
             ui.heading("Part browser");
@@ -109,6 +114,7 @@ pub fn browser_panel(
                 }
             });
         });
+    inset.0 = panel.response.rect.right() - ctx.viewport_rect().left();
     if *state != s {
         *state = s;
     }
