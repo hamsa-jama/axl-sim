@@ -40,3 +40,7 @@ llvmpipe in a single screenshot. They disappear with `--disable ssao`. The cause
 multiplied into the stronger specular term; it is likely smaller on a real GPU where TAA has accumulated
 many frames, but that has not been checked. Reflections are clearer than before but still softer than a
 true area-light render; the owner should judge on a real GPU (check O7).
+
+SSAO is also noisy on Medium, which pairs it with SMAA: Bevy's documentation says SSAO should be used with TAA
+to denoise it. Speckles show around parts in `docs/screenshots/m3-part-browser-brick_2x4-1280x720.png`.
+The spec fixes Medium at SMAA with low AO, so this is left as it is until the owner has seen it on a real GPU.
