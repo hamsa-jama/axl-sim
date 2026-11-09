@@ -27,9 +27,9 @@ pub mod abs {
     /// Reflectance.
     pub const REFLECTANCE: f32 = 0.5;
     /// Clearcoat strength.
-    pub const CLEARCOAT: f32 = 0.15;
+    pub const CLEARCOAT: f32 = 0.6;
     /// Clearcoat roughness.
-    pub const CLEARCOAT_ROUGHNESS: f32 = 0.2;
+    pub const CLEARCOAT_ROUGHNESS: f32 = 0.12;
 }
 
 /// Maximum roughness change from the per-part variation.
@@ -119,7 +119,7 @@ pub fn f32_to_f16_bits(value: f32) -> u16 {
 /// A tileable value-noise height field in `[0, 1]`, `size` x `size`.
 fn tileable_height(size: usize, seed: u64) -> Vec<f32> {
     // Sum of three octaves of lattice noise; every lattice wraps, so the result tiles.
-    let octaves: [(usize, f32); 3] = [(8, 0.5), (16, 0.3), (32, 0.2)];
+    let octaves: [(usize, f32); 3] = [(32, 0.4), (64, 0.35), (128, 0.25)];
     let mut h = vec![0.0f32; size * size];
     for (oi, (cells, weight)) in octaves.iter().enumerate() {
         let lattice: Vec<f32> = (0..cells * cells)

@@ -252,14 +252,14 @@ const fn strip(az: f32, power: f32) -> Softbox {
 }
 
 const SOFTBOXES: [Softbox; 12] = [
-    strip(22.0, 300.0),
-    strip(67.0, 300.0),
-    strip(157.0, 300.0),
-    strip(-23.0, 300.0),
-    strip(-68.0, 300.0),
-    strip(-158.0, 300.0),
-    strip(112.0, 300.0),
-    strip(-113.0, 300.0),
+    strip(22.0, 150.0),
+    strip(67.0, 150.0),
+    strip(157.0, 150.0),
+    strip(-23.0, 150.0),
+    strip(-68.0, 150.0),
+    strip(-158.0, 150.0),
+    strip(112.0, 150.0),
+    strip(-113.0, 150.0),
     // Large overhead key, slightly towards the key light's side.
     Softbox {
         az: -50.0,
@@ -346,8 +346,18 @@ pub fn studio_radiance(dir: Vec3) -> Vec3 {
     // eases off overhead. Flat faces see a gradient across their width and rounded edges sweep
     // through it, which is what makes bevels read as moulded plastic.
     let el = sky.asin().to_degrees();
-    let dome = smooth((el - 8.0) / 42.0) * (1.0 - 0.7 * smooth((el - 60.0) / 25.0));
-    c += Vec3::new(1.0, 0.99, 0.97) * 70.0 * dome;
+    let dome = smooth((el - 18.0) / 28.0) * (1.0 - 0.7 * smooth((el - 60.0) / 25.0));
+    // Brighter towards the key side (azimuth -50 degrees) so the three faces seen from the front
+    // differ in brightness.
+    let az = (-d.z).atan2(d.x);
+    let side = 0.65 + 0.35 * (az + 50f32.to_radians()).cos();
+    c += Vec3::new(1.0, 0.99, 0.97) * 60.0 * dome * side;
+    // A bright ring panel at 27..39 degrees elevation with soft edges, all the way round. Every
+    // face seen from a typical 25 to 45 degree camera mirrors one of its edges, so flat tops and
+    // sides show a defined softbox reflection that slides as the camera orbits.
+    let band = smooth((el - 27.0) / 3.0) * (1.0 - smooth((el - 37.0) / 3.0));
+    let lobe = (0.5 + 0.5 * (2.0 * (az + 50f32.to_radians())).cos()).powi(2);
+    c += Vec3::new(1.0, 0.99, 0.97) * 250.0 * band * (0.1 + 0.9 * lobe);
     for b in &SOFTBOXES {
         c += b.tint * b.power * softbox_mask(b, d);
     }
