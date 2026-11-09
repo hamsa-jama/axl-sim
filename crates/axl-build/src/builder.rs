@@ -4,12 +4,10 @@
 //! does. Positions are always snapped here; the UI only supplies cursor rays.
 
 use axl_parts::catalog::Catalog;
-use axl_parts::types::{Category, ColorId, DeviceModel, PartDef, PartId};
+use axl_parts::types::{Category, ColorId, DeviceModel, PartDef};
 
 use crate::geom::{ConnIndex, WPrim, derive_connections};
-use crate::model::{
-    Assembly, Connection, DeviceInstance, PlacedPart, Port, valid_device_name,
-};
+use crate::model::{Assembly, Connection, DeviceInstance, PlacedPart, Port, valid_device_name};
 use crate::orient::TurnAxis;
 use crate::place::{
     Context, Eval, Ghost, GhostItem, Hit, Ray, evaluate, find_snap, is_valid, problem_text,
@@ -147,7 +145,9 @@ impl Builder {
     }
 
     fn def(&self, id: &str) -> Result<&PartDef, BuildError> {
-        self.catalog.get(id).ok_or_else(|| BuildError::UnknownPart(id.into()))
+        self.catalog
+            .get(id)
+            .ok_or_else(|| BuildError::UnknownPart(id.into()))
     }
 
     fn edit(&mut self, label: &str, f: impl FnOnce(&mut Assembly)) {
@@ -201,6 +201,7 @@ impl Builder {
     /// Start placing a new part (a ghost follows the cursor). `color` defaults to the part's first.
     pub fn start_place(&mut self, part: &str, color: Option<&str>) -> Result<(), BuildError> {
         let def = self.def(part)?;
+        let part_id = def.id.clone();
         let color = match color {
             Some(c) => {
                 let id = ColorId(c.into());
@@ -212,7 +213,7 @@ impl Builder {
             None => def.colors[0].clone(),
         };
         self.cancel();
-        self.ghost = Some(Ghost::single(&def.id.clone(), &color));
+        self.ghost = Some(Ghost::single(&part_id, &color));
         self.ghost_kind = GhostKind::New;
         Ok(())
     }
@@ -231,9 +232,16 @@ impl Builder {
         if self.selection.is_empty() {
             return Err(BuildError::NothingSelected);
         }
-        let mut sel: Vec<&PlacedPart> = self.assembly.parts.iter().filter(|p| self.selection.contains(&p.uid)).collect();
+        let mut sel: Vec<&PlacedPart> = self
+            .assembly
+            .parts
+            .iter()
+            .filter(|p| self.selection.contains(&p.uid))
+            .collect();
         sel.sort_by_key(|p| p.uid);
-        let Some(first) = sel.first() else { return Err(BuildError::NothingSelected) };
+        let Some(first) = sel.first() else {
+            return Err(BuildError::NothingSelected);
+        };
         let anchor = first.pos;
         let items: Vec<GhostItem> = sel
             .iter()
@@ -242,7 +250,11 @@ impl Builder {
                 color: p.color.clone(),
                 orient: p.orient,
                 rel: [0, 1, 2].map(|k| p.pos[k] - anchor[k]),
-                device: if kind == GhostKind::Move { p.device.clone() } else { None },
+                device: if kind == GhostKind::Move {
+                    p.device.clone()
+                } else {
+                    None
+                },
                 from_uid: (kind == GhostKind::Move).then_some(p.uid),
             })
             .collect();
@@ -298,7 +310,9 @@ impl Builder {
 
     /// Point the ghost at a cursor ray: find the surface, snap, and check the placement.
     pub fn hover(&mut self, ray: &Ray) {
-        let Some(mut ghost) = self.ghost.take() else { return };
+        let Some(mut ghost) = self.ghost.take() else {
+            return;
+        };
         ghost.snap = None;
         ghost.valid = false;
         ghost.problem = None;
@@ -314,7 +328,13 @@ impl Builder {
                     (free[1] as f64 / 80.0).round() as i32 * 80,
                     free[2],
                 ];
-            } else if let Some((anchor, snap)) = find_snap(&self.catalog, &self.ctx, &ghost.items, &push_in(&hit, free), ray) {
+            } else if let Some((anchor, snap)) = find_snap(
+                &self.catalog,
+                &self.ctx,
+                &ghost.items,
+                &push_in(&hit, free),
+                ray,
+            ) {
                 ghost.anchor = anchor;
                 ghost.snap = Some(snap);
             } else {
@@ -330,7 +350,8 @@ impl Builder {
     /// The overlaps of the current ghost placement (for highlighting).
     pub fn ghost_eval(&self) -> Option<Eval> {
         let g = self.ghost.as_ref()?;
-        g.placed.then(|| evaluate(&self.catalog, &self.ctx, &g.items, g.anchor))
+        g.placed
+            .then(|| evaluate(&self.catalog, &self.ctx, &g.items, g.anchor))
     }
 
     /// Click: place the ghost. Returns the uids of the new or moved parts. The ghost stays active
@@ -342,7 +363,9 @@ impl Builder {
         }
         let ev = evaluate(&self.catalog, &self.ctx, &ghost.items, ghost.anchor);
         if !is_valid(&self.ctx, &ev) {
-            return Err(BuildError::Invalid(problem_text(&self.ctx, &ev).unwrap_or_default()));
+            return Err(BuildError::Invalid(
+                problem_text(&self.ctx, &ev).unwrap_or_default(),
+            ));
         }
         let kind = self.ghost_kind;
         let label = match kind {
@@ -352,12 +375,21 @@ impl Builder {
         };
         // For a move, `self.assembly` is the robot without the carried parts and the history entry
         // must hold the robot from before the pick-up.
-        let before = self.carry_origin.take().unwrap_or_else(|| self.assembly.clone());
+        let before = self
+            .carry_origin
+            .take()
+            .unwrap_or_else(|| self.assembly.clone());
         let mut result = self.assembly.clone();
-        let mut devices: Vec<DeviceInstance> = result.parts.iter().filter_map(|p| p.device.clone()).collect();
+        let mut devices: Vec<DeviceInstance> = result
+            .parts
+            .iter()
+            .filter_map(|p| p.device.clone())
+            .collect();
         let mut new_uids = Vec::new();
         for it in &ghost.items {
-            let Some(def) = self.catalog.get(&it.part.0) else { continue };
+            let Some(def) = self.catalog.get(&it.part.0) else {
+                continue;
+            };
             let device = match (&it.device, def.device.as_ref()) {
                 (Some(d), _) => Some(d.clone()),
                 (None, Some(dd)) => {
@@ -553,7 +585,11 @@ fn free_anchor(hit: &Hit, lo: [f64; 3], hi: [f64; 3]) -> [i32; 3] {
     let mut a = [0.0; 3];
     for k in 0..3 {
         a[k] = if k == hit.axis {
-            if hit.positive { hit.point[k] - lo[k] } else { hit.point[k] - hi[k] }
+            if hit.positive {
+                hit.point[k] - lo[k]
+            } else {
+                hit.point[k] - hi[k]
+            }
         } else {
             hit.point[k] - (lo[k] + hi[k]) / 2.0
         };
@@ -564,7 +600,10 @@ fn free_anchor(hit: &Hit, lo: [f64; 3], hi: [f64; 3]) -> [i32; 3] {
 /// Name and port for a new device: the next free port and a unique name.
 pub fn default_device(model: DeviceModel, existing: &[DeviceInstance]) -> DeviceInstance {
     if model == DeviceModel::Hub {
-        return DeviceInstance { name: unique_name("hub", existing), port: None };
+        return DeviceInstance {
+            name: unique_name("hub", existing),
+            port: None,
+        };
     }
     let base = match model {
         DeviceModel::Hub => "hub",
@@ -579,7 +618,10 @@ pub fn default_device(model: DeviceModel, existing: &[DeviceInstance]) -> Device
         .into_iter()
         .find(|p| !existing.iter().any(|d| d.port == Some(*p)))
         .unwrap_or(Port::F);
-    DeviceInstance { name: unique_name(base, existing), port: Some(port) }
+    DeviceInstance {
+        name: unique_name(base, existing),
+        port: Some(port),
+    }
 }
 
 fn unique_name(base: &str, existing: &[DeviceInstance]) -> String {

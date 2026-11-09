@@ -17,5 +17,5 @@ pub mod starter;
 pub mod validate;
 
 pub use builder::{BuildError, Builder, GhostKind};
-pub use model::{Assembly, Connection, ConnRef, DeviceInstance, JointKind, PlacedPart, Port};
+pub use model::{Assembly, ConnRef, Connection, DeviceInstance, JointKind, PlacedPart, Port};
 pub use orient::{Orient, TurnAxis};

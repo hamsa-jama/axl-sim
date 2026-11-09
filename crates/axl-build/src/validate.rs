@@ -29,7 +29,12 @@ pub struct Issue {
 }
 
 /// Run every check.
-pub fn validate(cat: &Catalog, asm: &Assembly, idx: &ConnIndex, conns: &[Connection]) -> Vec<Issue> {
+pub fn validate(
+    cat: &Catalog,
+    asm: &Assembly,
+    idx: &ConnIndex,
+    conns: &[Connection],
+) -> Vec<Issue> {
     let mut out = Vec::new();
     let def_of = |uid: u32| asm.get(uid).and_then(|p| cat.get(&p.part.0));
     let hubs: Vec<u32> = asm
@@ -61,7 +66,8 @@ pub fn validate(cat: &Catalog, asm: &Assembly, idx: &ConnIndex, conns: &[Connect
     }
 
     // Floating parts: everything outside the component that holds the hub (or the largest one).
-    let mut adj: BTreeMap<u32, BTreeSet<u32>> = asm.parts.iter().map(|p| (p.uid, BTreeSet::new())).collect();
+    let mut adj: BTreeMap<u32, BTreeSet<u32>> =
+        asm.parts.iter().map(|p| (p.uid, BTreeSet::new())).collect();
     for c in conns {
         adj.entry(c.a.uid).or_default().insert(c.b.uid);
         adj.entry(c.b.uid).or_default().insert(c.a.uid);
@@ -158,7 +164,9 @@ pub fn validate(cat: &Catalog, asm: &Assembly, idx: &ConnIndex, conns: &[Connect
     // Warnings: motors that turn nothing, wheels that cannot turn.
     let connected: BTreeSet<_> = conns.iter().flat_map(|c| [c.a, c.b]).collect();
     for p in &asm.parts {
-        let Some(def) = cat.get(&p.part.0) else { continue };
+        let Some(def) = cat.get(&p.part.0) else {
+            continue;
+        };
         match def.category {
             Category::Motor if def.bodies.len() == 2 => {
                 let rotor_used = idx
@@ -189,7 +197,9 @@ pub fn validate(cat: &Catalog, asm: &Assembly, idx: &ConnIndex, conns: &[Connect
                         None
                     };
                     other.is_some_and(|o| {
-                        idx.conns.iter().any(|w| w.r == o && matches!(w.kind, ConnKind::AxleShaft { .. }))
+                        idx.conns
+                            .iter()
+                            .any(|w| w.r == o && matches!(w.kind, ConnKind::AxleShaft { .. }))
                     })
                 });
                 if !on_axle {

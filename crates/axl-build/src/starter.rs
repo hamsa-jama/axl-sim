@@ -54,7 +54,14 @@ pub struct Step {
 }
 
 fn step(part: &'static str, color: &'static str, turns: &'static str, aim: Aim) -> Step {
-    Step { part, color, turns, aim, name: None, port: None }
+    Step {
+        part,
+        color,
+        turns,
+        aim,
+        name: None,
+        port: None,
+    }
 }
 
 fn named(mut s: Step, name: &'static str) -> Step {
@@ -69,10 +76,19 @@ pub fn rover_steps() -> Vec<Step> {
     vec![
         step("plate_8x16", "dark_grey", "", Aim::Down(0.0, 0.0)),
         named(step("hub", "white", "", Aim::Down(0.0, 0.0)), "hub"),
-        named(step("sensor_ultrasonic", "black", "", Aim::Down(24.0, 0.0)), "eye"),
+        named(
+            step("sensor_ultrasonic", "black", "", Aim::Down(24.0, 0.0)),
+            "eye",
+        ),
         // Motors: the output face points outward (+Y on the left, -Y on the right).
-        named(step("motor_medium", "light_grey", "", Aim::Up(4.0, 37.25)), "left"),
-        named(step("motor_medium", "light_grey", "RR", Aim::Up(4.0, -37.25)), "right"),
+        named(
+            step("motor_medium", "light_grey", "", Aim::Up(4.0, 37.25)),
+            "left",
+        ),
+        named(
+            step("motor_medium", "light_grey", "RR", Aim::Up(4.0, -37.25)),
+            "right",
+        ),
         step("axle_3", "dark_grey", "R", Aim::FromPosY(4.0, -12.0)),
         step("axle_3", "dark_grey", "RRR", Aim::FromNegY(4.0, -12.0)),
         step("wheel_56", "white", "T", Aim::FromPosY(4.0, -12.0)),
@@ -81,7 +97,10 @@ pub fn rover_steps() -> Vec<Step> {
         step("brick_2x2", "red", "", Aim::Up(-24.0, 0.0)),
         step("brick_2x2", "red", "", Aim::Up(-24.0, 0.0)),
         step("caster_ball", "dark_grey", "", Aim::Up(-24.0, 0.0)),
-        named(step("sensor_color", "white", "", Aim::Up(24.0, 0.0)), "color"),
+        named(
+            step("sensor_color", "white", "", Aim::Up(24.0, 0.0)),
+            "color",
+        ),
     ]
 }
 

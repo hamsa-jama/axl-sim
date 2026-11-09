@@ -6,8 +6,8 @@ use axl_parts::catalog::Catalog;
 use axl_parts::types::{ColorId, PartId};
 
 use crate::geom::{
-    ConnIndex, SNAP_RADIUS, WPrim, compat, exempt_pairs, is_shaft_in_hole, part_conns, part_prims,
-    penetration, OVERLAP_TOLERANCE_MM,
+    ConnIndex, OVERLAP_TOLERANCE_MM, SNAP_RADIUS, WPrim, compat, exempt_pairs, is_shaft_in_hole,
+    part_conns, part_prims, penetration,
 };
 use crate::model::{Assembly, ConnRef, DeviceInstance};
 use crate::orient::{Orient, TurnAxis};
@@ -26,13 +26,21 @@ impl Ray {
     pub fn distance_to(&self, p: [f64; 3]) -> f64 {
         let d = self.dir;
         let len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-        let v = [p[0] - self.origin[0], p[1] - self.origin[1], p[2] - self.origin[2]];
+        let v = [
+            p[0] - self.origin[0],
+            p[1] - self.origin[1],
+            p[2] - self.origin[2],
+        ];
         let t = if len2 > 0.0 {
             ((v[0] * d[0] + v[1] * d[1] + v[2] * d[2]) / len2).max(0.0)
         } else {
             0.0
         };
-        let q = [self.origin[0] + d[0] * t, self.origin[1] + d[1] * t, self.origin[2] + d[2] * t];
+        let q = [
+            self.origin[0] + d[0] * t,
+            self.origin[1] + d[1] * t,
+            self.origin[2] + d[2] * t,
+        ];
         ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2) + (p[2] - q[2]).powi(2)).sqrt()
     }
 }
@@ -149,7 +157,10 @@ impl Context {
         let prims: Vec<(u32, Vec<(u8, WPrim)>)> = asm
             .parts
             .iter()
-            .filter_map(|p| cat.get(&p.part.0).map(|d| (p.uid, part_prims(d, p.pos, p.orient))))
+            .filter_map(|p| {
+                cat.get(&p.part.0)
+                    .map(|d| (p.uid, part_prims(d, p.pos, p.orient)))
+            })
             .collect();
         let mut floor_z = f64::MAX;
         for (_, ps) in &prims {
@@ -179,7 +190,13 @@ impl Context {
                     && best.as_ref().is_none_or(|b| t < b.t)
                 {
                     let point = [0, 1, 2].map(|k| ray.origin[k] + ray.dir[k] * t);
-                    best = Some(Hit { point, axis, positive, uid: Some(*uid), t });
+                    best = Some(Hit {
+                        point,
+                        axis,
+                        positive,
+                        uid: Some(*uid),
+                        t,
+                    });
                 }
             }
         }
@@ -187,7 +204,13 @@ impl Context {
             let t = (self.floor_z - ray.origin[2]) / ray.dir[2];
             if t >= 0.0 && best.as_ref().is_none_or(|b| t < b.t) {
                 let point = [0, 1, 2].map(|k| ray.origin[k] + ray.dir[k] * t);
-                best = Some(Hit { point, axis: 2, positive: true, uid: None, t });
+                best = Some(Hit {
+                    point,
+                    axis: 2,
+                    positive: true,
+                    uid: None,
+                    t,
+                });
             }
         }
         best
@@ -262,7 +285,9 @@ pub fn evaluate(cat: &Catalog, ctx: &Context, items: &[GhostItem], anchor: [i32;
     let mut ev = Eval::default();
     let mut exempt: BTreeSet<(usize, u32)> = BTreeSet::new();
     for (i, it) in items.iter().enumerate() {
-        let Some(def) = cat.get(&it.part.0) else { continue };
+        let Some(def) = cat.get(&it.part.0) else {
+            continue;
+        };
         let pos = [0, 1, 2].map(|k| anchor[k] + it.rel[k]);
         for g in part_conns(def, u32::MAX - i as u32, pos, it.orient) {
             for t in ctx.index.at(g.pos) {
@@ -277,7 +302,9 @@ pub fn evaluate(cat: &Catalog, ctx: &Context, items: &[GhostItem], anchor: [i32;
     }
     let mut over = BTreeSet::new();
     for (i, it) in items.iter().enumerate() {
-        let Some(def) = cat.get(&it.part.0) else { continue };
+        let Some(def) = cat.get(&it.part.0) else {
+            continue;
+        };
         let pos = [0, 1, 2].map(|k| anchor[k] + it.rel[k]);
         let mine = part_prims(def, pos, it.orient);
         for (uid, theirs) in &ctx.prims {
@@ -288,8 +315,9 @@ pub fn evaluate(cat: &Catalog, ctx: &Context, items: &[GhostItem], anchor: [i32;
                 theirs.iter().any(|(_, q)| {
                     let (pl, ph) = p.aabb();
                     let (ql, qh) = q.aabb();
-                    (0..3).all(|k| pl[k] < qh[k] - OVERLAP_TOLERANCE_MM && ql[k] < ph[k] - OVERLAP_TOLERANCE_MM)
-                        && penetration(p, q) > OVERLAP_TOLERANCE_MM
+                    (0..3).all(|k| {
+                        pl[k] < qh[k] - OVERLAP_TOLERANCE_MM && ql[k] < ph[k] - OVERLAP_TOLERANCE_MM
+                    }) && penetration(p, q) > OVERLAP_TOLERANCE_MM
                 })
             });
             if hit {
@@ -322,7 +350,13 @@ pub fn problem_text(ctx: &Context, ev: &Eval) -> Option<String> {
 /// is often further than 6 mm from a hole that lies inside the part).
 /// Returns the snapped anchor and what it snapped to. Ties go to the connector nearest the cursor
 /// ray, then to the placement with fewer overlaps.
-pub fn find_snap(cat: &Catalog, ctx: &Context, items: &[GhostItem], frees: &[[i32; 3]], ray: &Ray) -> Option<([i32; 3], Snap)> {
+pub fn find_snap(
+    cat: &Catalog,
+    ctx: &Context,
+    items: &[GhostItem],
+    frees: &[[i32; 3]],
+    ray: &Ray,
+) -> Option<([i32; 3], Snap)> {
     struct Cand {
         anchor: [i32; 3],
         snap: Snap,
@@ -331,7 +365,9 @@ pub fn find_snap(cat: &Catalog, ctx: &Context, items: &[GhostItem], frees: &[[i3
     let mut cands: Vec<Cand> = Vec::new();
     for free in frees {
         for (i, it) in items.iter().enumerate() {
-            let Some(def) = cat.get(&it.part.0) else { continue };
+            let Some(def) = cat.get(&it.part.0) else {
+                continue;
+            };
             let pos = [0, 1, 2].map(|k| free[k] + it.rel[k]);
             for g in part_conns(def, u32::MAX - i as u32, pos, it.orient) {
                 for t in ctx.index.near(g.pos, SNAP_RADIUS) {
@@ -342,7 +378,11 @@ pub fn find_snap(cat: &Catalog, ctx: &Context, items: &[GhostItem], frees: &[[i3
                     let tp = t.pos.map(|v| v as f64 * 0.1);
                     cands.push(Cand {
                         anchor,
-                        snap: Snap { target: t.r, item: i, conn: (g.r.body, g.r.conn) },
+                        snap: Snap {
+                            target: t.r,
+                            item: i,
+                            conn: (g.r.body, g.r.conn),
+                        },
                         d: ray.distance_to(tp),
                     });
                 }

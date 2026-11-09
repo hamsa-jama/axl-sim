@@ -99,13 +99,22 @@ pub fn from_text(text: &str, cat: &Catalog, path: &str) -> Result<Assembly, File
     let mut seen = std::collections::BTreeSet::new();
     for p in file.parts {
         if cat.get(&p.part.0).is_none() {
-            return Err(FileError::Invalid(format!("This robot uses a part that does not exist: {}.", p.part.0)));
+            return Err(FileError::Invalid(format!(
+                "This robot uses a part that does not exist: {}.",
+                p.part.0
+            )));
         }
         let Some(orient) = Orient::from_index(p.orient) else {
-            return Err(FileError::Invalid(format!("Part {} has an orientation outside 0 to 23.", p.uid)));
+            return Err(FileError::Invalid(format!(
+                "Part {} has an orientation outside 0 to 23.",
+                p.uid
+            )));
         };
         if !seen.insert(p.uid) {
-            return Err(FileError::Invalid(format!("Two parts have the uid {}.", p.uid)));
+            return Err(FileError::Invalid(format!(
+                "Two parts have the uid {}.",
+                p.uid
+            )));
         }
         parts.push(PlacedPart {
             uid: p.uid,
@@ -117,11 +126,18 @@ pub fn from_text(text: &str, cat: &Catalog, path: &str) -> Result<Assembly, File
         });
     }
     let next_uid = parts.iter().map(|p| p.uid).max().map_or(1, |m| m + 1);
-    Ok(Assembly { name: file.name, parts, next_uid })
+    Ok(Assembly {
+        name: file.name,
+        parts,
+        next_uid,
+    })
 }
 
 fn io_err(path: &Path, e: std::io::Error) -> FileError {
-    FileError::Io { path: path.display().to_string(), message: e.to_string() }
+    FileError::Io {
+        path: path.display().to_string(),
+        message: e.to_string(),
+    }
 }
 
 /// Write `bytes` to `path` atomically: a temporary file in the same folder, then a rename. An
@@ -174,7 +190,13 @@ pub fn robots_dir() -> Option<PathBuf> {
 pub fn file_stem(name: &str) -> String {
     let s: String = name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let s = s.trim_matches('_').to_string();
     if s.is_empty() { "robot".into() } else { s }
@@ -187,7 +209,9 @@ pub fn robot_path(name: &str) -> Option<PathBuf> {
 
 /// Saved robots in `<data>/robots`, sorted by file name.
 pub fn list_robots() -> Vec<PathBuf> {
-    let Some(dir) = robots_dir() else { return vec![] };
+    let Some(dir) = robots_dir() else {
+        return vec![];
+    };
     let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()

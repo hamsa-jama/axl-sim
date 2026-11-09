@@ -58,9 +58,7 @@ pub fn compat(a: &WorldConn, b: &WorldConn) -> Option<JointKind> {
         match (m.kind, f.kind) {
             (Stud, AntiStud) if opposite => Some(JointKind::Rigid),
             (PinShaft { friction }, RoundHole) if parallel => Some(JointKind::Hinge { friction }),
-            (AxleShaft { .. }, RoundHole) if parallel => {
-                Some(JointKind::Hinge { friction: false })
-            }
+            (AxleShaft { .. }, RoundHole) if parallel => Some(JointKind::Hinge { friction: false }),
             (AxleShaft { .. }, AxleHole) if parallel => Some(JointKind::Rigid),
             _ => None,
         }
@@ -215,7 +213,10 @@ impl WPrim {
                 hi[ax] = c[ax] + h;
                 (lo, hi)
             }
-            WPrim::Sphere { c, r } => ([c[0] - r, c[1] - r, c[2] - r], [c[0] + r, c[1] + r, c[2] + r]),
+            WPrim::Sphere { c, r } => (
+                [c[0] - r, c[1] - r, c[2] - r],
+                [c[0] + r, c[1] + r, c[2] + r],
+            ),
         }
     }
 }
@@ -233,7 +234,8 @@ pub fn part_prims(def: &PartDef, pos: [i32; 3], orient: Orient) -> Vec<(u8, WPri
             let w = match *prim {
                 CollisionPrim::Box { center, half } => {
                     let c = place(center);
-                    let hv = orient.rotate_f([half[0] * 1000.0, half[1] * 1000.0, half[2] * 1000.0]);
+                    let hv =
+                        orient.rotate_f([half[0] * 1000.0, half[1] * 1000.0, half[2] * 1000.0]);
                     let h = hv.map(f64::abs);
                     WPrim::Box {
                         lo: [c[0] - h[0], c[1] - h[1], c[2] - h[2]],
@@ -296,16 +298,28 @@ pub fn penetration(a: &WPrim, b: &WPrim) -> f64 {
                 return axial;
             }
             let (p, q) = others(*ax);
-            let d = circle_rect(
-                [c[p], c[q]],
-                *r,
-                [lo[p], lo[q]],
-                [hi[p], hi[q]],
-            );
+            let d = circle_rect([c[p], c[q]], *r, [lo[p], lo[q]], [hi[p], hi[q]]);
             axial.min(d)
         }
         (Sphere { c: c1, r: r1 }, Sphere { c: c2, r: r2 }) => r1 + r2 - dist(*c1, *c2),
-        (Sphere { c, r }, Cyl { c: cc, ax, r: cr, h }) | (Cyl { c: cc, ax, r: cr, h }, Sphere { c, r }) => {
+        (
+            Sphere { c, r },
+            Cyl {
+                c: cc,
+                ax,
+                r: cr,
+                h,
+            },
+        )
+        | (
+            Cyl {
+                c: cc,
+                ax,
+                r: cr,
+                h,
+            },
+            Sphere { c, r },
+        ) => {
             let (p, q) = others(*ax);
             let mut near = *c;
             near[*ax] = c[*ax].clamp(cc[*ax] - h, cc[*ax] + h);
@@ -322,9 +336,23 @@ pub fn penetration(a: &WPrim, b: &WPrim) -> f64 {
             }
             r - dist(*c, near)
         }
-        (Cyl { c: c1, ax: a1, r: r1, h: h1 }, Cyl { c: c2, ax: a2, r: r2, h: h2 }) => {
+        (
+            Cyl {
+                c: c1,
+                ax: a1,
+                r: r1,
+                h: h1,
+            },
+            Cyl {
+                c: c2,
+                ax: a2,
+                r: r2,
+                h: h2,
+            },
+        ) => {
             if a1 == a2 {
-                let axial = interval_overlap((c1[*a1] - h1, c1[*a1] + h1), (c2[*a1] - h2, c2[*a1] + h2));
+                let axial =
+                    interval_overlap((c1[*a1] - h1, c1[*a1] + h1), (c2[*a1] - h2, c2[*a1] + h2));
                 if axial <= 0.0 {
                     return axial;
                 }
@@ -364,7 +392,10 @@ fn circle_rect(c: [f64; 2], r: f64, lo: [f64; 2], hi: [f64; 2]) -> f64 {
     let qx = c[0].clamp(lo[0], hi[0]);
     let qy = c[1].clamp(lo[1], hi[1]);
     if qx == c[0] && qy == c[1] {
-        let m = (c[0] - lo[0]).min(hi[0] - c[0]).min(c[1] - lo[1]).min(hi[1] - c[1]);
+        let m = (c[0] - lo[0])
+            .min(hi[0] - c[0])
+            .min(c[1] - lo[1])
+            .min(hi[1] - c[1]);
         return r + m;
     }
     r - ((c[0] - qx).powi(2) + (c[1] - qy).powi(2)).sqrt()
@@ -390,12 +421,20 @@ pub fn prims_overlap(a: &[(u8, WPrim)], b: &[(u8, WPrim)]) -> bool {
 
 /// Pairs of part uids that overlap, with the shaft-through-hole pairs exempt. `conns` is the
 /// derived connection list of the same assembly.
-pub fn overlapping_pairs(cat: &Catalog, asm: &Assembly, idx: &ConnIndex, conns: &[Connection]) -> Vec<(u32, u32)> {
+pub fn overlapping_pairs(
+    cat: &Catalog,
+    asm: &Assembly,
+    idx: &ConnIndex,
+    conns: &[Connection],
+) -> Vec<(u32, u32)> {
     let exempt = exempt_pairs(idx, conns);
     let prims: Vec<(u32, Vec<(u8, WPrim)>)> = asm
         .parts
         .iter()
-        .filter_map(|p| cat.get(&p.part.0).map(|d| (p.uid, part_prims(d, p.pos, p.orient))))
+        .filter_map(|p| {
+            cat.get(&p.part.0)
+                .map(|d| (p.uid, part_prims(d, p.pos, p.orient)))
+        })
         .collect();
     let mut out = Vec::new();
     for i in 0..prims.len() {
@@ -432,20 +471,43 @@ mod tests {
 
     #[test]
     fn touching_boxes_do_not_overlap_but_deep_ones_do() {
-        let a = WPrim::Box { lo: [0.0; 3], hi: [10.0; 3] };
-        let touching = WPrim::Box { lo: [10.0, 0.0, 0.0], hi: [20.0, 10.0, 10.0] };
-        let deep = WPrim::Box { lo: [9.0, 0.0, 0.0], hi: [20.0, 10.0, 10.0] };
+        let a = WPrim::Box {
+            lo: [0.0; 3],
+            hi: [10.0; 3],
+        };
+        let touching = WPrim::Box {
+            lo: [10.0, 0.0, 0.0],
+            hi: [20.0, 10.0, 10.0],
+        };
+        let deep = WPrim::Box {
+            lo: [9.0, 0.0, 0.0],
+            hi: [20.0, 10.0, 10.0],
+        };
         assert!(penetration(&a, &touching) <= 0.0);
         assert!(penetration(&a, &deep) > 0.9);
     }
 
     #[test]
     fn sphere_and_cylinder_depths() {
-        let s = WPrim::Sphere { c: [0.0, 0.0, 9.0], r: 8.0 };
-        let floor = WPrim::Box { lo: [-50.0, -50.0, 0.0], hi: [50.0, 50.0, 2.0] };
+        let s = WPrim::Sphere {
+            c: [0.0, 0.0, 9.0],
+            r: 8.0,
+        };
+        let floor = WPrim::Box {
+            lo: [-50.0, -50.0, 0.0],
+            hi: [50.0, 50.0, 2.0],
+        };
         assert!((penetration(&s, &floor) - 1.0).abs() < 1e-9);
-        let cyl = WPrim::Cyl { c: [0.0; 3], ax: 0, r: 2.0, h: 10.0 };
-        let b = WPrim::Box { lo: [8.0, -5.0, -5.0], hi: [20.0, 5.0, 5.0] };
+        let cyl = WPrim::Cyl {
+            c: [0.0; 3],
+            ax: 0,
+            r: 2.0,
+            h: 10.0,
+        };
+        let b = WPrim::Box {
+            lo: [8.0, -5.0, -5.0],
+            hi: [20.0, 5.0, 5.0],
+        };
         assert!((penetration(&cyl, &b) - 2.0).abs() < 1e-9);
     }
 }
