@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M5 Compiler is accepted and merged into `main` (merge commit 02da742); the next milestone is M6 Hardware (not started). M4 is accepted and merged into `main` (merge commit 8ddb35b). `fix/env-lighting` is merged (01c319c): per-pass perf lines restored with a test, dimmer room with discrete softboxes, `environment.cube_size`, decision 0008. Crisp softbox reflections were NOT achieved (see 0008: Bevy's prefilter blurs them; a custom CPU-baked prefiltered map is the follow-up). Open items: owner checks O10 to O13, and re-measure env cost on the laptop (docs/perf.md).
+M6 Hardware is accepted and merged into `main` (merge commit 7143c58); the next milestone is M7 Controllers (not started). `fix/env-single-default` is merged (4245eb7, decision 0011). Open items: owner checks O10 to O14 (tags `m03-done` and `m05-done` still need pushing: O8, O13), and the low-priority render follow-up from the owner's laptop run: GPU `uniform_allocation` and `bin_unpacking` grew on Low after the bindless mask; check whether they scale with the number of distinct materials and, if so, reduce per-part roughness/brightness variation levels on Low (record before and after under llvmpipe).
 
 ## Owner checks
 
@@ -42,7 +42,7 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | O12 | M5 | Sandbox looks right on a real GPU | `cargo run -p axl-app --release -- --sandbox rover --volts left=4,right=4`. The Rover should drive forward in a straight line with wheels turning and the caster rolling. Try `left=4,right=2` for a curve and `left=4,right=-4` for a spin. |
 | O13 | M5 | Push the `m05-done` tag (sandbox push refused) | `git fetch origin && git tag -a m05-done -m "M5 compiler accepted" 02da742 && git push origin m05-done` (02da742 is the M5 merge commit named in Where I stopped). |
 
-| O14 | M6 | Push the `m06-done` tag (sandbox push refused) | PLACEHOLDER |
+| O14 | M6 | Push the `m06-done` tag (sandbox push refused) | `git fetch origin && git tag -a m06-done -m "M6 hardware accepted" 7143c58 && git push origin m06-done` (7143c58 is the M6 merge commit). |
 
 ## Development notes
 
