@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M4 is accepted (merge commit: see `git log --merges`). Next, per the coordinator: branch `fix/env-lighting` (environment map cost and crisp softbox reflections, perf-summary regression, decision 0008), then M5 Compiler. Open items: owner checks O10 and O11 below.
+M4 is accepted and merged into `main` (merge commit 8ddb35b). Next, per the coordinator: branch `fix/env-lighting` (environment map cost and crisp softbox reflections, perf-summary regression, decision 0008), then M5 Compiler. Open items: owner checks O10 and O11 below.
 
 ## Owner checks
 
@@ -38,7 +38,7 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | O9 | M3 | Add a Poly Haven studio HDRI (optional, recommended) | 1. Open https://polyhaven.com/hdris/studio and pick a neutral indoor studio HDRI (CC0, for example "Studio Small 08"). 2. Download the 2K `.hdr` file. 3. Save it as `assets/render/studio.hdr` in the repository (it is loaded at start-up if present; a file that fails to load falls back to the procedural studio and logs why). 4. Run `cargo run -p axl-app --release -- --lookdev` and compare. 5. Commit the file only if the licence note is added to `assets/render/README`-style text in the commit message (CC0 needs no attribution). |
 
 | O10 | M4 | Build a robot in the UI on a real GPU | `cargo run -p axl-app --release -- --builder`. 1. Pick "Plate 8x16" in the palette (type `plate_8x16` in the search box), click on the floor. 2. Pick the hub, click on the plate. 3. Pick "Medium motor", press `R` twice and `U`, hover the plate near a side, click (the motor hangs under the plate). 4. Pick "Axle 3" and press `R` three times (right side), hover the motor's output end, click. 5. Pick "Wheel 56 mm", press `T`, hover the axle end, click. 6. Repeat mirrored on the other side (orbit with right-drag first). 7. Press Save, quit, start again and use Load. 8. Or load the Rover starter from the Load box and check the validation panel says "No problems found". Judge: is hanging parts with `U` understandable? Do the ghost, highlights and dots read well? |
-| O11 | M4 | Push the `m04-done` tag (sandbox push refused) | `git fetch origin && git tag -a m04-done -m "M4 builder accepted" <M4 merge commit on main> && git push origin m04-done`. |
+| O11 | M4 | Push the `m04-done` tag (sandbox push refused) | `git fetch origin && git tag -a m04-done -m "M4 builder accepted" 8ddb35b && git push origin m04-done`. |
 
 ## Development notes
 
