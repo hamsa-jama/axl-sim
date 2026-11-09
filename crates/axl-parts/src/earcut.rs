@@ -190,7 +190,7 @@ impl List {
         let mut guard = 0usize;
         while self.n[ear].prev != self.n[ear].next {
             guard += 1;
-            if guard > 4 * self.n.len() + 64 {
+            if guard > 8 * self.n.len() * self.n.len() + 64 {
                 return;
             }
             let (prev, next) = (self.n[ear].prev, self.n[ear].next);

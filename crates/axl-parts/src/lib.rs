@@ -1,7 +1,14 @@
-//! axl-parts: see this crate's `README.md` for what it owns.
+//! axl-parts: part catalog types, RON loading, connectors and procedural mesh generation.
 //!
-//! This crate is a skeleton created in milestone M0. Its real contents arrive
-//! in the milestone listed for it in `SPEC.md`.
+//! Everything here is plain data and arithmetic: no Bevy, no GPU. Meshes are generated in
+//! millimetres by small generators and handed to the renderer as [`trimesh::MeshData`]
+//! (metres, f32).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+pub mod earcut;
+pub mod extrude;
+pub mod lathe;
+pub mod profile;
+pub mod trimesh;
