@@ -64,10 +64,13 @@ pub const DISABLE_NAMES: [&str; 10] = [
 /// probe. The clearcoat layer runs the whole lookup a second time.
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum EnvMode {
-    /// Today's default: whichever path the adapter allows (the array path on most desktop GPUs).
-    #[default]
+    /// Whichever path the adapter allows (the array path on most desktop GPUs). A diagnostic
+    /// since decision 0011: it costs about 8 ms in the opaque pass on the reference laptop.
     Array,
-    /// Force the non-array path by masking `TEXTURE_BINDING_ARRAY` before the device is created.
+    /// The default (decision 0011): force the non-array path by masking `TEXTURE_BINDING_ARRAY`
+    /// before the device is created. AXL has exactly one environment map, so the clustered
+    /// light-probe array buys nothing.
+    #[default]
     Single,
     /// Keep the diffuse map and replace the specular map with a 1x1 black cube.
     DiffuseOnly,
@@ -563,7 +566,7 @@ mod tests {
             assert_eq!(EnvMode::parse(n).unwrap().label(), n);
         }
         assert!(EnvMode::parse("arrays").is_err());
-        assert_eq!(EnvMode::default(), EnvMode::Array);
+        assert_eq!(EnvMode::default(), EnvMode::Single);
         assert!(EnvMode::Array.disabled_features().is_none());
         assert_eq!(
             EnvMode::Single.disabled_features(),
