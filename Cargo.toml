@@ -33,3 +33,39 @@ debug = false
 
 [profile.release]
 debug = "line-tables-only"
+
+[workspace.dependencies]
+# Bevy is shared by `axl-render` and `axl-app` (the only crates allowed to use it),
+# so both must see exactly the same feature set. Decision record 0003 explains the pin.
+bevy = { version = "=0.20.1", default-features = false, features = [
+    "std",
+    "async_executor",
+    "multi_threaded",
+    "bevy_log",
+    "bevy_window",
+    "bevy_winit",
+    "x11",
+    "wayland",
+    "bevy_render",
+    "bevy_core_pipeline",
+    "bevy_pbr",
+    "bevy_light",
+    "bevy_camera",
+    "bevy_mesh",
+    "bevy_color",
+    "bevy_image",
+    "bevy_shader",
+    "bevy_material",
+    "bevy_post_process",
+    "bevy_anti_alias",
+    "bevy_gizmos",
+    "bevy_gizmos_render",
+    "bevy_picking",
+    "mesh_picking",
+    "bevy_camera_controller",
+    "pan_orbit_camera",
+    "png",
+    "zstd_rust",
+    "experimental_pbr_pcss",
+    "tonemapping_luts",
+] }

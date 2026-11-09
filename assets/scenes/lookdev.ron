@@ -1,0 +1,83 @@
+// Look-dev scene (SPEC.md, "Look-dev scene"): a 2x4 brick, a 7-hole beam, a 24-tooth gear,
+// a 56 mm wheel and the Rover on the grid floor. All lengths are millimetres, Z up, floor at z = 0.
+// Shapes are placeholders until the real parts arrive in milestone M3.
+(
+    version: 1,
+    camera: (
+        focus_mm: (0.0, 10.0, 12.0),
+        yaw_deg: -52.0,
+        pitch_deg: 26.0,
+        distance_mm: 520.0,
+    ),
+    items: [
+        (
+            name: "brick_2x4",
+            pos_mm: (-120.0, 40.0, 0.0),
+            yaw_deg: 18.0,
+            shapes: [
+                (shape: Box(size_mm: (31.8, 15.8, 9.6), bevel_mm: 0.15), offset_mm: (0.0, 0.0, 4.8), color: "red", material: Abs),
+                (shape: Studs(nx: 4, ny: 2), offset_mm: (0.0, 0.0, 9.6), color: "red", material: Abs),
+            ],
+        ),
+        (
+            name: "beam_7",
+            pos_mm: (-30.0, 120.0, 0.0),
+            yaw_deg: -24.0,
+            shapes: [
+                (shape: Box(size_mm: (55.2, 7.2, 7.2), bevel_mm: 0.3), offset_mm: (0.0, 0.0, 3.6), color: "blue", material: Abs),
+                (shape: Cylinder(radius_mm: 2.4, length_mm: 7.3, axis: Y), offset_mm: (-24.0, 0.0, 3.6), color: "black", material: Abs),
+                (shape: Cylinder(radius_mm: 2.4, length_mm: 7.3, axis: Y), offset_mm: (-16.0, 0.0, 3.6), color: "black", material: Abs),
+                (shape: Cylinder(radius_mm: 2.4, length_mm: 7.3, axis: Y), offset_mm: (-8.0, 0.0, 3.6), color: "black", material: Abs),
+                (shape: Cylinder(radius_mm: 2.4, length_mm: 7.3, axis: Y), offset_mm: (0.0, 0.0, 3.6), color: "black", material: Abs),
+                (shape: Cylinder(radius_mm: 2.4, length_mm: 7.3, axis: Y), offset_mm: (8.0, 0.0, 3.6), color: "black", material: Abs),
+                (shape: Cylinder(radius_mm: 2.4, length_mm: 7.3, axis: Y), offset_mm: (16.0, 0.0, 3.6), color: "black", material: Abs),
+                (shape: Cylinder(radius_mm: 2.4, length_mm: 7.3, axis: Y), offset_mm: (24.0, 0.0, 3.6), color: "black", material: Abs),
+            ],
+        ),
+        (
+            name: "gear_24",
+            pos_mm: (60.0, 95.0, 0.0),
+            yaw_deg: 0.0,
+            shapes: [
+                (shape: Gear(teeth: 24, thickness_mm: 3.2), offset_mm: (0.0, 0.0, 1.6), color: "yellow", material: Abs),
+            ],
+        ),
+        (
+            name: "wheel_56",
+            pos_mm: (120.0, 20.0, 0.0),
+            yaw_deg: 35.0,
+            shapes: [
+                (shape: Cylinder(radius_mm: 28.0, length_mm: 14.0, axis: Y), offset_mm: (0.0, 0.0, 28.0), color: "black", material: Rubber),
+                (shape: Cylinder(radius_mm: 17.0, length_mm: 14.6, axis: Y), offset_mm: (0.0, 0.0, 28.0), color: "white", material: Abs),
+                (shape: Cylinder(radius_mm: 4.0, length_mm: 15.2, axis: Y), offset_mm: (0.0, 0.0, 28.0), color: "dark_grey", material: Abs),
+            ],
+        ),
+        (
+            name: "rover",
+            pos_mm: (-5.0, -75.0, 0.0),
+            yaw_deg: 28.0,
+            shapes: [
+                // chassis plate, hub, motors
+                (shape: Box(size_mm: (87.8, 55.8, 3.2), bevel_mm: 0.15), offset_mm: (0.0, 0.0, 19.6), color: "dark_grey", material: Abs),
+                (shape: Studs(nx: 11, ny: 7), offset_mm: (0.0, 0.0, 21.2), color: "dark_grey", material: Abs),
+                (shape: Box(size_mm: (56.0, 40.0, 22.0), bevel_mm: 0.15), offset_mm: (4.0, 0.0, 32.2), color: "white", material: Abs),
+                (shape: Box(size_mm: (40.0, 22.0, 22.0), bevel_mm: 0.15), offset_mm: (0.0, 39.0, 28.0), color: "light_grey", material: Abs),
+                (shape: Box(size_mm: (40.0, 22.0, 22.0), bevel_mm: 0.15), offset_mm: (0.0, -39.0, 28.0), color: "light_grey", material: Abs),
+                // wheels (56 mm tyres)
+                (shape: Cylinder(radius_mm: 28.0, length_mm: 14.0, axis: Y), offset_mm: (0.0, 57.0, 28.0), color: "black", material: Rubber),
+                (shape: Cylinder(radius_mm: 17.0, length_mm: 14.6, axis: Y), offset_mm: (0.0, 57.0, 28.0), color: "white", material: Abs),
+                (shape: Cylinder(radius_mm: 28.0, length_mm: 14.0, axis: Y), offset_mm: (0.0, -57.0, 28.0), color: "black", material: Rubber),
+                (shape: Cylinder(radius_mm: 17.0, length_mm: 14.6, axis: Y), offset_mm: (0.0, -57.0, 28.0), color: "white", material: Abs),
+                // ball caster
+                (shape: Box(size_mm: (14.0, 14.0, 4.0), bevel_mm: 0.15), offset_mm: (-36.0, 0.0, 16.0), color: "dark_grey", material: Abs),
+                (shape: Sphere(radius_mm: 8.0), offset_mm: (-36.0, 0.0, 8.0), color: "light_grey", material: Steel),
+                // ultrasonic sensor with two round eyes, colour sensor underneath
+                (shape: Box(size_mm: (14.0, 44.0, 18.0), bevel_mm: 0.15), offset_mm: (52.0, 0.0, 32.0), color: "black", material: Abs),
+                (shape: Cylinder(radius_mm: 8.0, length_mm: 4.0, axis: X), offset_mm: (60.0, 12.0, 32.0), color: "light_grey", material: Steel),
+                (shape: Cylinder(radius_mm: 8.0, length_mm: 4.0, axis: X), offset_mm: (60.0, -12.0, 32.0), color: "light_grey", material: Steel),
+                (shape: Box(size_mm: (16.0, 16.0, 12.0), bevel_mm: 0.15), offset_mm: (46.0, 0.0, 12.0), color: "light_grey", material: Abs),
+                (shape: Cylinder(radius_mm: 3.0, length_mm: 1.0, axis: Z), offset_mm: (46.0, 0.0, 5.7), color: "red", material: Abs),
+            ],
+        ),
+    ],
+)

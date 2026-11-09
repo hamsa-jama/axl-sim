@@ -1,0 +1,44 @@
+// Final light values for the studio look (SPEC.md, "Lighting"). Tuned by eye from
+// look-dev screenshots; edit and re-run `axl --lookdev --screenshot out.png`.
+// Illuminance is in lux, environment intensity scales a relative-radiance
+// cubemap into cd/m2, exposure follows a physical camera (EV100 from f-stop,
+// shutter and ISO).
+(
+    version: 1,
+    key_light: (
+        // Spec: one directional light at 50 degrees elevation.
+        elevation_deg: 50.0,
+        // Compass angle of the light around the vertical axis (AXL +X is 0).
+        azimuth_deg: -50.0,
+        illuminance_lux: 9000.0,
+        color_srgb: (1.0, 0.97, 0.92),
+        // Shadow cascades reach this far from the camera (metres) and the first
+        // cascade ends at the second value. Parts are small, so these are tight.
+        shadow_max_distance_m: 3.0,
+        shadow_first_cascade_m: 0.25,
+    ),
+    environment: (
+        // Scale from the relative radiance of the generated studio cubemap to cd/m2.
+        intensity: 2800.0,
+        backdrop_srgb: (0.80, 0.81, 0.82),
+    ),
+    camera: (
+        // Physical exposure: EV100 = log2(N^2 * 100 / (t * ISO)).
+        aperture_f: 4.0,
+        shutter_s: 0.008,
+        iso: 100.0,
+        fov_deg: 35.0,
+        near_m: 0.005,
+        far_m: 100.0,
+    ),
+    floor: (
+        base_srgb: (0.80, 0.81, 0.82),
+        roughness: 0.75,
+        reflectance: 0.3,
+        // How strongly grid lines darken the floor (before lighting), per line family.
+        minor_ink: 0.30,
+        major_ink: 0.45,
+        bold_ink: 0.60,
+    ),
+    bloom: (intensity: 0.12),
+)

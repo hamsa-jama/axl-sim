@@ -32,6 +32,18 @@ pub struct Args {
     #[arg(long, value_name = "PATH", requires = "lookdev")]
     pub screenshot: Option<PathBuf>,
 
+    /// Render this many boxes moving through the snapshot path, for the frame-rate check.
+    #[arg(long, value_name = "N", conflicts_with_all = ["headless", "lookdev"])]
+    pub stress_boxes: Option<usize>,
+
+    /// Quality preset: low, medium, high or ultra. Overrides the saved setting and skips the benchmark.
+    #[arg(long, value_name = "PRESET", conflicts_with = "headless")]
+    pub quality: Option<String>,
+
+    /// Run for this many seconds, then print a frame-time summary and exit (frame-rate checks).
+    #[arg(long, value_name = "SECONDS", conflicts_with = "headless")]
+    pub perf_seconds: Option<f32>,
+
     /// Exit after this many rendered frames. For smoke tests.
     #[arg(long, value_name = "N", hide = true, conflicts_with = "headless")]
     pub exit_after_frames: Option<u32>,
