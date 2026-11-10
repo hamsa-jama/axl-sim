@@ -649,7 +649,11 @@ fn draw_overlays(
     }
     if let Some((a, b)) = view.drag {
         g.line(v3(a), v3(b), Color::srgb(1.0, 0.9, 0.2));
-        g.sphere(Isometry3d::from_translation(v3(b)), 0.004, Color::srgb(1.0, 0.9, 0.2));
+        g.sphere(
+            Isometry3d::from_translation(v3(b)),
+            0.004,
+            Color::srgb(1.0, 0.9, 0.2),
+        );
     }
     // The selected body and the hovered hinge are always marked.
     if let Some(b) = view.selected.and_then(|i| view.bodies.get(i)) {

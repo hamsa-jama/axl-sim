@@ -57,6 +57,11 @@ pub struct Args {
     #[arg(long, value_name = "LIST", requires = "sandbox")]
     pub volts: Option<String>,
 
+    /// Scripted instrument actions for screenshots, comma separated: `overlays=1+3`, `plots`,
+    /// `select=N`, `pause_at=S`, `export_at=S`, `drag_at=S`, `rewind=AT:TO`, `hover_joint`.
+    #[arg(long, value_name = "LIST", hide = true)]
+    pub instruments: Option<String>,
+
     /// Open the Builder screen.
     #[arg(long, conflicts_with_all = ["headless", "lookdev", "stress_boxes", "parts"])]
     pub builder: bool,

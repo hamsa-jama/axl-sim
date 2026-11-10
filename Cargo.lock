@@ -446,6 +446,8 @@ dependencies = [
  "axl-code",
  "axl-compile",
  "axl-host",
+ "axl-hw",
+ "axl-mujoco",
  "axl-parts",
  "axl-render",
  "axl-sim",

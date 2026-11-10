@@ -28,6 +28,8 @@ axl-build = { path = "../axl-build" }
 axl-compile = { path = "../axl-compile" }
 axl-parts = { path = "../axl-parts" }
 axl-sim = { path = "../axl-sim" }
+axl-hw = { path = "../axl-hw" }
+axl-mujoco = { path = "../axl-mujoco" }
 axl-host = { path = "../axl-host" }
 axl-code = { path = "../axl-code" }
 crossbeam-channel = "0.5"
