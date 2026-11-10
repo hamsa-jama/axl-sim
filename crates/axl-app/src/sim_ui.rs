@@ -737,6 +737,7 @@ pub fn instruments_ui(
         .fixed_pos(free.min + egui::vec2(8.0, 8.0))
         .order(egui::Order::Foreground)
         .show(&ctx, |ui| {
+            ui.set_max_width(free.width() - 24.0);
             frame.show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Overlays");
@@ -761,8 +762,9 @@ pub fn instruments_ui(
         .fixed_pos(egui::pos2(free.center().x, free.bottom() - 8.0))
         .order(egui::Order::Foreground)
         .show(&ctx, |ui| {
+            ui.set_max_width(free.width() - 24.0);
             frame.show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     if ui.button("Reset").on_hover_text("Ctrl+R").clicked() {
                         send(&sim, Command::Reset);
                     }
@@ -835,7 +837,8 @@ pub fn instruments_ui(
         let b = live.bodies.get(sel).copied();
         egui::Window::new("Inspector")
             .open(&mut open)
-            .default_pos(egui::pos2(free.right() - 300.0, free.top() + 52.0))
+            .default_pos(egui::pos2((free.right() - 350.0).max(free.left() + 8.0), free.top() + 52.0))
+            .constrain_to(free)
             .resizable(false)
             .show(&ctx, |ui| {
                 ui.strong(&name);
@@ -943,8 +946,9 @@ fn plotter(ctx: &egui::Context, free: egui::Rect, ins: &mut Instruments) {
     let mut export = false;
     egui::Window::new("Plots")
         .open(&mut open)
-        .default_pos(egui::pos2(free.right() - 580.0, free.bottom() - 340.0))
-        .default_size(egui::vec2(560.0, 250.0))
+        .default_pos(egui::pos2((free.right() - 580.0).max(free.left() + 8.0), free.bottom() - 340.0))
+        .default_size(egui::vec2(560.0_f32.min(free.width() - 16.0), 250.0))
+        .constrain_to(free)
         .show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label("Window");
