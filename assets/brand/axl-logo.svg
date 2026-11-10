@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 256" width="720" height="256" role="img" aria-label="AXL">
+  <title>AXL</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a3f66"/>
+      <stop offset="1" stop-color="#16233d"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <rect x="16" y="16" width="224" height="224" rx="48" fill="url(#g)"/>
+    <g fill="#e9eef7">
+      <circle cx="86" cy="86" r="34"/><circle cx="170" cy="86" r="34"/><circle cx="86" cy="170" r="34"/>
+    </g>
+    <g fill="#ffffff" opacity=".35">
+      <ellipse cx="76" cy="74" rx="14" ry="9"/><ellipse cx="160" cy="74" rx="14" ry="9"/><ellipse cx="76" cy="158" rx="14" ry="9"/>
+    </g>
+    <circle cx="170" cy="170" r="34" fill="#0d1628"/>
+    <path d="M170 146v48M146 170h48" stroke="#ff8a1f" stroke-width="16" stroke-linecap="round" fill="none"/>
+  </g>
+  <!-- wordmark drawn as strokes: A X L -->
+  <g fill="none" stroke="#16233d" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M290 200 L342 56 L394 200"/>
+    <path d="M311 150 H373" stroke-width="22"/>
+    <path d="M430 56 L520 200 M520 56 L430 200" />
+    <path d="M572 56 V200 H660"/>
+  </g>
+  <circle cx="475" cy="128" r="12" fill="#ff8a1f"/>
+</svg>
