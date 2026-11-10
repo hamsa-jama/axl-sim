@@ -3,6 +3,7 @@
 mod fetch_mujoco;
 mod mujoco_checksums;
 mod mujoco_env;
+mod sdk_check;
 
 use std::path::PathBuf;
 
@@ -24,8 +25,15 @@ enum Command {
     MujocoEnv,
     /// Run the accuracy suite and write target/validation/report.md and report.json.
     Validate,
-    /// Build every template and reference solution and run them (arrives with M7).
-    SdkCheck,
+    /// Build every template and reference solution and run them (M9).
+    SdkCheck {
+        /// Fail if wasi-sdk is missing instead of skipping the C projects.
+        #[arg(long)]
+        require_c: bool,
+        /// Fail if the wasm32-wasip1 target is missing instead of only running cargo check.
+        #[arg(long)]
+        require_rust: bool,
+    },
     /// Build the release package for this OS (arrives with M10).
     Package,
     /// Write assets/parts/*.ron from the generator in axl-parts.
@@ -52,7 +60,16 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Validate => validate(),
-        Command::SdkCheck => not_yet("sdk-check", "M7"),
+        Command::SdkCheck {
+            require_c,
+            require_rust,
+        } => sdk_check::run(
+            &workspace_root(),
+            sdk_check::Options {
+                require_c,
+                require_rust,
+            },
+        ),
         Command::Package => not_yet("package", "M10"),
         Command::GenParts => {
             let n = axl_parts::catalog::write_builtin(&workspace_root().join("assets/parts"))?;
