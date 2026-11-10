@@ -242,8 +242,10 @@ mod tests {
             None
         );
         // A settings file without a saved quality also still benchmarks.
-        let mut s = Settings::default();
-        s.units = GridUnits::Metric;
+        let s = Settings {
+            units: GridUnits::Metric,
+            ..Settings::default()
+        };
         s.save(&dir.join("settings.ron")).unwrap();
         assert_eq!(
             Settings::load(&dir.join("settings.ron")).unwrap().quality,

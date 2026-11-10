@@ -287,3 +287,35 @@ fn snapshots_carry_what_the_overlays_and_the_plotter_need() {
     // The wheels turn: some joint has a speed.
     assert!(s.joints.iter().any(|j| j.speed.abs() > 1.0));
 }
+
+#[test]
+fn the_mouse_spring_pulls_towards_the_target_and_replays_exactly() {
+    let c = rover();
+    let root = c.bodies.bodies[0].id;
+    let mut sb = Sandbox::spawn(&c, &[]).unwrap();
+    sb.send(Command::SetSpeed(4.0));
+    let s = wait_for(&mut sb, 10.0, "first snapshot", |s| s.time > 0.2);
+    let p = s.bodies[root].pos;
+    let target = [p[0], p[1] + 0.20, p[2]];
+    sb.send(Command::DragTo {
+        body: root,
+        local: [0.0; 3],
+        target,
+    });
+    // The spring is slow compared with the frame rate it is driven at: it never overshoots wildly.
+    let s = wait_for(&mut sb, 20.0, "pulled", |s| {
+        s.bodies[root].pos[1] > p[1] + 0.08
+    });
+    assert!(
+        s.bodies[root].pos[1] < p[1] + 0.3,
+        "flung: {:?}",
+        s.bodies[root].pos
+    );
+    let want = checkpoint_hash(&sb, 3.0);
+    sb.send(Command::ClearDrag);
+    sb.send(Command::Rewind(3.0));
+    let s = wait_for(&mut sb, 30.0, "replay to 3 s", |s| {
+        s.paused && s.replay_target.is_none() && (s.time - 3.0).abs() < 1e-6
+    });
+    assert_eq!(s.hash, want, "the spring was not replayed");
+}

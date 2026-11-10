@@ -194,6 +194,16 @@ pub enum Command {
         /// Force, newtons.
         force: [f64; 3],
     },
+    /// The mouse spring: pull a point of a body (given in the body's frame) towards a world target
+    /// with a damped spring, evaluated every tick until replaced or cleared.
+    DragTo {
+        /// MuJoCo body id.
+        body: usize,
+        /// Grab point in the body's frame.
+        local: [f64; 3],
+        /// World point the cursor is at.
+        target: [f64; 3],
+    },
     /// The mouse drag ended: remove the drag force.
     ClearDrag,
     /// End the thread.

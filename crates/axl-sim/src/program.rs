@@ -119,7 +119,39 @@ pub struct PickHit {
 #[derive(Clone, Copy, Debug)]
 struct DragEvent {
     ms: u64,
-    force: Option<(usize, [f64; 3], [f64; 3])>,
+    action: Option<DragAction>,
+}
+
+/// What a drag command asks for (`None` in a [`DragEvent`] clears the drag).
+#[derive(Clone, Copy, Debug)]
+enum DragAction {
+    /// A constant force at a world point.
+    Force(usize, [f64; 3], [f64; 3]),
+    /// A spring from a point of the body (in its frame) to a world target, evaluated every tick.
+    Spring(usize, [f64; 3], [f64; 3]),
+}
+
+/// How stiff the mouse spring is, as a rate: it pulls with `mass * OMEGA^2` per metre. A feel
+/// parameter of the interface, not a physical constant.
+const SPRING_OMEGA: f64 = 12.0;
+/// Damping ratio of the mouse spring.
+const SPRING_ZETA: f64 = 0.7;
+/// The spring never pulls with more than this many times the robot's weight.
+const SPRING_MAX_WEIGHTS: f64 = 6.0;
+
+/// Rotate `v` by the unit quaternion `q` = `[w, x, y, z]`.
+fn quat_rotate(q: [f64; 4], v: [f64; 3]) -> [f64; 3] {
+    let [w, x, y, z] = q;
+    let t = [
+        2.0 * (y * v[2] - z * v[1]),
+        2.0 * (z * v[0] - x * v[2]),
+        2.0 * (x * v[1] - y * v[0]),
+    ];
+    [
+        v[0] + w * t[0] + (y * t[2] - z * t[1]),
+        v[1] + w * t[1] + (z * t[0] - x * t[2]),
+        v[2] + w * t[2] + (x * t[1] - y * t[0]),
+    ]
 }
 
 struct Inner {
@@ -147,6 +179,7 @@ struct Inner {
     channels: Vec<String>,
     drag_log: Vec<DragEvent>,
     drag_next: usize,
+    spring: Option<(usize, [f64; 3], [f64; 3])>,
 }
 
 impl Inner {
@@ -198,21 +231,69 @@ impl Inner {
         self.send(SimEvent::Picked { id, hit });
     }
 
-    fn drag(&mut self, force: Option<(usize, [f64; 3], [f64; 3])>) {
+    fn drag(&mut self, action: Option<DragAction>) {
         if self.replay_to.is_some() {
             return; // the logged drags are being replayed
         }
         let ms = self.sim_ms();
-        self.drag_log.push(DragEvent { ms, force });
+        self.drag_log.push(DragEvent { ms, action });
         self.drag_next = self.drag_log.len();
-        self.apply_drag(force);
+        self.apply_drag(action);
     }
 
-    fn apply_drag(&mut self, force: Option<(usize, [f64; 3], [f64; 3])>) {
-        match force {
-            Some((body, point, f)) => self.core.physics_mut().apply_force(BodyId(body), point, f),
+    fn apply_drag(&mut self, action: Option<DragAction>) {
+        self.spring = None;
+        match action {
+            Some(DragAction::Force(body, point, f)) => {
+                self.core.physics_mut().apply_force(BodyId(body), point, f);
+            }
+            Some(DragAction::Spring(body, local, target)) => {
+                self.spring = Some((body, local, target));
+            }
             None => self.core.physics_mut().clear_applied_forces(),
         }
+    }
+
+    /// The mouse spring: pull the grab point towards the target with a damped spring, once per
+    /// tick, so it stays stable however slowly the window draws.
+    fn apply_spring(&mut self) {
+        let Some((body, local, target)) = self.spring else {
+            return;
+        };
+        let root = self.core.root_body();
+        let physics = self.core.physics_mut();
+        let b = BodyId(body);
+        // Positions and velocities are stale after a step until `forward`: always refresh them, or
+        // the force would depend on whether a snapshot happened to be published in between (and a
+        // replay would differ).
+        physics.forward();
+        let pose = physics.body_pose(b);
+        let r = quat_rotate(pose.quat, local);
+        let grab = [pose.pos[0] + r[0], pose.pos[1] + r[1], pose.pos[2] + r[2]];
+        let com = physics.body_com(b);
+        let vel = physics.body_linear_velocity(b);
+        let w = physics.body_angular_velocity(b);
+        let arm = [grab[0] - com[0], grab[1] - com[1], grab[2] - com[2]];
+        let v = [
+            vel[0] + w[1] * arm[2] - w[2] * arm[1],
+            vel[1] + w[2] * arm[0] - w[0] * arm[2],
+            vel[2] + w[0] * arm[1] - w[1] * arm[0],
+        ];
+        let m = physics.subtree_mass(root).max(1e-3);
+        let k = m * SPRING_OMEGA * SPRING_OMEGA;
+        let c = 2.0 * SPRING_ZETA * m * SPRING_OMEGA;
+        let mut f = [0.0; 3];
+        for i in 0..3 {
+            f[i] = k * (target[i] - grab[i]) - c * v[i];
+        }
+        let norm = f.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let cap = SPRING_MAX_WEIGHTS * m * 9.81;
+        if norm > cap {
+            for x in &mut f {
+                *x *= cap / norm;
+            }
+        }
+        physics.apply_force(b, grab, f);
     }
 
     /// While replaying, apply the logged drag commands that are due.
@@ -223,7 +304,7 @@ impl Inner {
                 break;
             }
             self.drag_next += 1;
-            self.apply_drag(e.force);
+            self.apply_drag(e.action);
         }
     }
 
@@ -245,6 +326,7 @@ impl Inner {
                     self.restart = true;
                     self.pending_replay = None;
                     self.drag_log.clear();
+                    self.spring = None;
                 }
                 Command::Rewind(t) => {
                     self.restart = true;
@@ -262,8 +344,13 @@ impl Inner {
                 }
                 Command::Pick { id, origin, dir } => self.pick(id, origin, dir),
                 Command::ApplyDragForce { body, point, force } => {
-                    self.drag(Some((body, point, force)));
+                    self.drag(Some(DragAction::Force(body, point, force)));
                 }
+                Command::DragTo {
+                    body,
+                    local,
+                    target,
+                } => self.drag(Some(DragAction::Spring(body, local, target))),
                 Command::ClearDrag => self.drag(None),
             }
         }
@@ -326,6 +413,7 @@ impl Inner {
         if self.replay_to.is_some() {
             self.replay_drags();
         }
+        self.apply_spring();
         if !self.core.tick() {
             self.failed = true;
             self.replay_to = None;
@@ -572,6 +660,7 @@ pub(crate) fn sim_thread(
         channels: Vec::new(),
         drag_log: Vec::new(),
         drag_next: 0,
+        spring: None,
     }));
     {
         let mut s = inner.borrow_mut();
@@ -588,6 +677,7 @@ pub(crate) fn sim_thread(
                 s.channels.clear();
                 s.replay_to = s.pending_replay.take();
                 s.drag_next = 0;
+                s.spring = None;
                 s.step_budget = 0;
                 s.rebase();
                 s.publish(None);

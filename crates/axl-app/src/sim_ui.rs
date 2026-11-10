@@ -32,14 +32,6 @@ const CONTACT_HOLD_S: f64 = 0.07;
 const SAMPLE_HZ: f64 = 50.0;
 /// Time windows the plotter offers, seconds.
 const WINDOWS: [f64; 5] = [5.0, 10.0, 20.0, 30.0, 60.0];
-/// How stiff the mouse spring is, as a rate: the dragged body is pulled with `mass * OMEGA^2` per
-/// metre. A feel parameter of the interface, not a physical constant.
-const SPRING_OMEGA: f64 = 9.0;
-/// Damping ratio of the mouse spring.
-const SPRING_ZETA: f64 = 0.7;
-/// The spring never pulls with more than this many times the robot's weight.
-const SPRING_MAX_WEIGHTS: f64 = 1.5;
-
 /// A drag in progress.
 #[derive(Clone, Copy, Debug)]
 struct Drag {
@@ -492,7 +484,6 @@ pub fn instruments_input(
     windows: Query<&Window, With<PrimaryWindow>>,
     cams: Query<(&Camera, &GlobalTransform), With<ViewCamera>>,
     insets: Option<Res<ViewInsets>>,
-    time: Res<Time<Real>>,
     mut ins: ResMut<Instruments>,
     mut live: ResMut<LiveView>,
 ) {
@@ -625,29 +616,12 @@ pub fn instruments_input(
             Some(v3(o + d * s))
         });
         if let Some(target) = target {
-            let m = live.robot_mass.max(1e-3);
-            // The force is set once per frame and held, so the spring must be slow compared to
-            // the frame time or it blows up (a slow frame rate gets a softer spring).
-            let omega = SPRING_OMEGA.min(0.5 / f64::from(time.delta_secs()).max(1e-3));
-            let k = m * omega * omega;
-            let c = 2.0 * SPRING_ZETA * m * omega;
-            let mut f = [0.0; 3];
-            for i in 0..3 {
-                f[i] = k * (target[i] - grab[i]) - c * b.velocity[i];
-            }
-            let norm = f.iter().map(|x| x * x).sum::<f64>().sqrt();
-            let cap = SPRING_MAX_WEIGHTS * m * 9.81;
-            if norm > cap {
-                for x in &mut f {
-                    *x *= cap / norm;
-                }
-            }
             send(
                 &sim,
-                Command::ApplyDragForce {
+                Command::DragTo {
                     body: drag.body,
-                    point: grab,
-                    force: f,
+                    local: drag.local,
+                    target,
                 },
             );
             live.drag = Some((grab, target));
@@ -1125,18 +1099,43 @@ mod tests {
     }
 
     #[test]
-    fn the_exported_csv_parses_back() {
-        let mut p = PlotStore::new();
+    fn the_exported_csv_file_parses_back() {
+        let mut ins = Instruments::default();
         for i in 0..10 {
             let t = f64::from(i) * 0.1;
-            p.push("a, b", false, t, t * 2.0);
-            p.push("c", true, t, -t);
+            ins.plots.push("a, b", false, t, t * 2.0);
+            ins.plots.push("c", true, t, -t);
         }
-        let csv = p.to_csv(&["a, b", "c"], 0.2, 0.6);
-        let parsed = axl_sim::plot::parse_csv(&csv).unwrap();
-        assert_eq!(parsed.channels, vec!["a, b".to_owned(), "c".to_owned()]);
-        assert_eq!(parsed.rows.len(), 5);
-        assert!((parsed.rows[0].0 - 0.2).abs() < 1e-12);
-        assert_eq!(parsed.rows[0].1[0], Some(0.4));
+        ins.channels_on.insert("a, b".to_owned());
+        ins.channels_on.insert("c".to_owned());
+        let path = std::env::temp_dir().join(format!("axl-csv-{}.csv", std::process::id()));
+        ins.csv_path = Some(path.clone());
+        export_csv(&mut ins, 0.15, 0.65);
+        assert!(
+            ins.csv_note.starts_with("Saved 2 channel(s)"),
+            "{}",
+            ins.csv_note
+        );
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let (header, rows) = axl_sim::plot::parse_csv(&text).unwrap();
+        assert_eq!(header, vec!["time_s", "a, b", "c"]);
+        assert_eq!(rows.len(), 5);
+        assert_eq!(rows[0][0], Some(0.2));
+        assert_eq!(rows[0][1], Some(0.4));
+        assert_eq!(rows[0][2], Some(-0.2));
+        assert!((rows[4][0].unwrap() - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn scripted_actions_parse() {
+        let (s, o) = parse_script("overlays=1+3,plots,select=2,pause_at=1.5,rewind=3:1").unwrap();
+        assert_eq!(o, vec![0, 2]);
+        assert!(s.plots);
+        assert_eq!(s.select, Some(2));
+        assert_eq!(s.pause_at, Some(1.5));
+        assert_eq!(s.rewind, Some((3.0, 1.0)));
+        assert!(parse_script("overlays=9").is_err());
+        assert!(parse_script("nope").is_err());
     }
 }
