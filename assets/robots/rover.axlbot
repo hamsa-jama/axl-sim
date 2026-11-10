@@ -13,7 +13,7 @@
         (
             uid: 2,
             part: "hub",
-            pos: (0, 0, 32),
+            pos: (-160, 0, 32),
             orient: 0,
             color: "white",
             device: Some((
@@ -24,7 +24,7 @@
         (
             uid: 3,
             part: "sensor_ultrasonic",
-            pos: (240, 0, 256),
+            pos: (80, 0, 256),
             orient: 0,
             color: "black",
             device: Some((
@@ -89,7 +89,7 @@
         (
             uid: 10,
             part: "brick_2x2",
-            pos: (-240, 0, -96),
+            pos: (-400, 0, -64),
             orient: 0,
             color: "red",
             device: None,
@@ -97,7 +97,7 @@
         (
             uid: 11,
             part: "brick_2x2",
-            pos: (-240, 0, -192),
+            pos: (-400, 0, -160),
             orient: 0,
             color: "red",
             device: None,
@@ -105,7 +105,7 @@
         (
             uid: 12,
             part: "caster_ball",
-            pos: (-240, 0, -400),
+            pos: (-400, 0, -368),
             orient: 0,
             color: "dark_grey",
             device: None,

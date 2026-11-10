@@ -1,0 +1,11 @@
+(
+    version: 1,
+    id: "cylinder_wood_40x60",
+    name: "Wood cylinder 40 x 60 mm",
+    shape: Cylinder(diameter: 0.04, height: 0.06),
+    mass: 0.038,
+    friction: 0.4,
+    hollow: false,
+    source: "SPEC: pine",
+    color: (222, 184, 135),
+)

@@ -1,0 +1,38 @@
+(
+    version: 1,
+    id: "m11",
+    title: "Escape the Maze",
+    chapter: 4,
+    concepts: ["State machines", "Wall following"],
+    world: (id: "maze"),
+    robot: Starter("rover"),
+    time_limit_s: 125.0,
+    grading_seeds: [1, 2, 3],
+    battery_soc: (0.8, 1.0),
+    brief_md: r#"
+## Find the way out
+
+The maze has 6 x 6 cells of 250 mm. Reach the **goal cell** (the far corner, shown on the floor
+plan) within **120 seconds** on every one of the three layouts. Your program does not know the layout.
+
+A **state machine** keeps the Rover's current mood in a variable: `LOOK`, `FORWARD`, `TURN_LEFT`,
+`TURN_RIGHT`. Each step the program does what the state says and then decides whether to change it.
+A classic rule is *keep one hand on the wall*: always turn right if you can, otherwise go straight,
+otherwise turn left, otherwise turn around. It finds the way out of any maze like this.
+"#,
+    predict: Some((
+        question: "How many cells long is the shortest way from the start cell to the goal cell on the first layout?",
+        unit: "cells",
+        measured: "shortest_path_cells",
+    )),
+    criteria: [ReachZone(zone: "goal", within_s: 120.0)],
+    stars: (
+        (text: "Reach the goal in under 60 seconds", criteria: [FinishWithin(zone: "goal", within_s: 60.0)]),
+        (text: "Never touch a wall", criteria: [FinishWithin(zone: "goal", within_s: 60.0), NoContact(tag: "wall")]),
+    ),
+    hints: (
+        "Break the problem into one move at a time: a function that drives forward exactly one cell (250 mm) and a function that turns by 90 degrees.",
+        "At each cell, turn right and look with the distance sensor. A reading below about 0.2 m means a wall. Try right, then straight, then left, then back.",
+        "Turn with axl_motor_position on both motors like in m03. Keep the Rover in the middle of the corridor by driving one exact cell at a time from the middle of a cell.",
+    ),
+)

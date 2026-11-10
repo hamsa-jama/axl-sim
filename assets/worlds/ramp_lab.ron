@@ -1,0 +1,24 @@
+(
+    version: 1,
+    id: "ramp_lab",
+    name: "Ramp lab",
+    statics: [
+        (name: "ramp_10", primitive: Box((0.6, 0.2, 0.005)), pos: (0.8900, -0.9, 0.0993), euler_deg: (0.0, -10.0, 0.0), material: "rubber"),
+        (name: "ramp_15", primitive: Box((0.6, 0.2, 0.005)), pos: (0.8783, -0.3, 0.1505), euler_deg: (0.0, -15.0, 0.0), material: "plastic"),
+        (name: "ramp_20", primitive: Box((0.6, 0.2, 0.005)), pos: (0.8621, 0.3, 0.2005), euler_deg: (0.0, -20.0, 0.0), material: "rubber"),
+        (name: "ramp_25", primitive: Box((0.6, 0.2, 0.005)), pos: (0.8417, 0.9, 0.2490), euler_deg: (0.0, -25.0, 0.0), material: "plastic"),
+    ],
+    spawn: (x: 0.05, y: 0.0, yaw: 0.0),
+    zones: [
+        (name: "top_10", shape: Rect(min: (1.2818, -1.0999999999999999), max: (1.4818, -0.7))),
+        (name: "top_15", shape: Rect(min: (1.2591, -0.5), max: (1.4591, -0.09999999999999998))),
+        (name: "top_20", shape: Rect(min: (1.2276, 0.09999999999999998), max: (1.4276, 0.5))),
+        (name: "top_25", shape: Rect(min: (1.1876, 0.7), max: (1.3876, 1.0999999999999999))),
+    ],
+    variants: [
+        (id: "ramp_10", spawn: Some((x: 0.05, y: -0.9, yaw: 0.0))),
+        (id: "ramp_15", spawn: Some((x: 0.05, y: -0.3, yaw: 0.0))),
+        (id: "ramp_20", spawn: Some((x: 0.05, y: 0.3, yaw: 0.0))),
+        (id: "ramp_25", spawn: Some((x: 0.05, y: 0.9, yaw: 0.0))),
+    ],
+)

@@ -1,0 +1,41 @@
+(
+    version: 1,
+    id: "m05",
+    title: "Mind the Wall",
+    chapter: 2,
+    concepts: ["Range sensors", "Blind spots"],
+    world: (id: "walled_arena", variant: Some("straight"), seed_variants: [(3, "angled")]),
+    robot: Starter("rover_tof"),
+    time_limit_s: 15.0,
+    grading_seeds: [1, 2, 3],
+    battery_soc: (0.7, 1.0),
+    brief_md: r#"
+## Stop 100 mm from the wall
+
+Drive towards the wall and stop with the **front of the Rover 100 mm from it** (90 to 110 mm), without
+touching it. On the third test run the wall is turned by 50 degrees.
+
+This Rover has two distance sensors: the ultrasonic `eye`, which sends a cone of sound, and the
+time-of-flight sensor `tof`, which sends narrow beams of light. A flat surface that is turned too far
+away from a sensor reflects the signal off to the side, so the sensor sees nothing. Which of the two
+sensors still sees a wall that is turned by 50 degrees?
+"#,
+    predict: Some((
+        question: "The wall is turned 50 degrees away from the ultrasonic sensor. Does the sensor see it? Answer 1 for yes and 0 for no.",
+        unit: "1 or 0",
+        measured: "sees_angled_wall",
+    )),
+    criteria: [
+        FrontClearance(min_m: 0.09, max_m: 0.11, within_s: 15.0),
+        NoContact(tag: "wall"),
+    ],
+    stars: (
+        (text: "Stop within 3 mm of 100 mm", criteria: [FrontClearance(min_m: 0.097, max_m: 0.103, within_s: 15.0)]),
+        (text: "Be stopped in under 5 seconds", criteria: [FrontClearance(min_m: 0.097, max_m: 0.103, within_s: 5.0)]),
+    ),
+    hints: (
+        "Print the readings of both sensors on the third run. A distance of -1 means the sensor got no echo.",
+        "The time-of-flight sensor reads surfaces up to 75 degrees away from its beam; the ultrasonic one only up to 40 degrees.",
+        "Drive fast while the wall is far, and slow down as the distance gets small: power = min(0.6, (distance - 0.1) * 2). The sensor reports the distance from itself, so subtract how far the sensor is behind the front of the plate.",
+    ),
+)

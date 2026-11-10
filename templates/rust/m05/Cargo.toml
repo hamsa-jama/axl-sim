@@ -1,0 +1,14 @@
+[package]
+name = "robot"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+axl-robot = { path = "../../../sdk/rust/axl-robot" }
+
+[profile.release]
+debug = "line-tables-only"
+
+# Built on its own for wasm32-wasip1, not as part of the AXL workspace.
+[workspace]

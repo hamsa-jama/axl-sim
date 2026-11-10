@@ -75,6 +75,9 @@ jobs:
       - name: Accuracy suite
         run: cargo xtask validate
 
+      - name: Templates and reference solutions (C and Rust, built and graded headless)
+        run: cargo xtask sdk-check --require-c --require-rust
+
       - name: Upload the accuracy report
         if: always()
         uses: actions/upload-artifact@v4

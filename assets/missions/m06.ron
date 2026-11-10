@@ -1,0 +1,37 @@
+(
+    version: 1,
+    id: "m06",
+    title: "Filter the Noise",
+    chapter: 2,
+    concepts: ["Noise", "Averaging", "Median"],
+    world: (id: "walled_arena", variant: Some("box_ahead")),
+    robot: Starter("rover"),
+    time_limit_s: 5.0,
+    grading_seeds: [1, 2, 3],
+    battery_soc: (0.9, 0.9),
+    brief_md: r#"
+## How far away is the box?
+
+The Rover stands still, looking at a box. Measure the distance from the ultrasonic sensor to the
+box and **report it** with `axl_report("distance", metres)`. It must be within 5 mm of the true value
+on all three test runs.
+
+One reading is never exactly right. Every reading has a little random noise, so two readings from
+the same place differ. Combine many readings to get a better answer.
+"#,
+    predict: Some((
+        question: "The Rover stands still. Take 40 readings of the distance. How big is their spread (the standard deviation)?",
+        unit: "mm",
+        measured: "sensor_sigma_mm",
+    )),
+    criteria: [Report(key: "distance", expected: Measured("sensor_range_m"), tol: 0.005, within_s: Some(5.0))],
+    stars: (
+        (text: "Within 2 mm", criteria: [Report(key: "distance", expected: Measured("sensor_range_m"), tol: 0.002, within_s: Some(5.0))]),
+        (text: "Within 2 mm in under 1 second", criteria: [Report(key: "distance", expected: Measured("sensor_range_m"), tol: 0.002, within_s: Some(1.0))]),
+    ),
+    hints: (
+        "Print 20 readings and look at them. They scatter around the true value.",
+        "The average of N noisy readings scatters about sqrt(N) times less than one reading. The median is better when some readings are far off.",
+        "The sensor makes a new reading every 50 ms, so axl_step(50) gives you a new one each time. Add up the readings in a loop and divide by how many there are. Ignore readings of -1.",
+    ),
+)

@@ -20,6 +20,7 @@ use axl_mujoco::{BodyId, GroupMask, Pose};
 use crossbeam_channel::{Receiver, Sender};
 use triple_buffer::Input;
 
+use crate::mission::Recorder;
 use crate::{Command, SimCore, SimSnapshot, UNSTABLE_MESSAGE, joint_hash};
 
 /// Most plot channels one program may use (SPEC).
@@ -180,6 +181,8 @@ struct Inner {
     drag_log: Vec<DragEvent>,
     drag_next: usize,
     spring: Option<(usize, [f64; 3], [f64; 3])>,
+    /// A graded headless run: no snapshots, a recorder samples the run instead.
+    recorder: Option<Recorder>,
 }
 
 impl Inner {
@@ -410,6 +413,11 @@ impl Inner {
         if !self.wait_turn() {
             return Ok(false);
         }
+        if let Some(limit) = self.core.limit_s()
+            && self.core.time() >= limit - 1e-9
+        {
+            return Ok(false);
+        }
         if self.replay_to.is_some() {
             self.replay_drags();
         }
@@ -419,6 +427,10 @@ impl Inner {
             self.replay_to = None;
             self.publish(Some(UNSTABLE_MESSAGE));
             return Err(UNSTABLE_MESSAGE.into());
+        }
+        if let Some(rec) = self.recorder.as_mut() {
+            rec.after_tick(&mut self.core);
+            return Ok(true);
         }
         if self.sim_ms().is_multiple_of(1000) {
             self.checkpoint();
@@ -562,6 +574,9 @@ impl RobotApi for SimRobot {
 
     fn plot(&mut self, channel: &str, value: f64) -> Result<(), String> {
         let mut s = self.0.borrow_mut();
+        if let Some(r) = s.recorder.as_mut() {
+            r.plot_used = true;
+        }
         if !s.channels.iter().any(|c| c == channel) {
             if s.channels.len() >= MAX_PLOT_CHANNELS {
                 return Err(format!(
@@ -580,7 +595,11 @@ impl RobotApi for SimRobot {
     }
 
     fn mark_pose(&mut self, x: f64, y: f64, yaw: f64) {
-        let s = self.0.borrow();
+        let mut s = self.0.borrow_mut();
+        let t = s.core.time();
+        if let Some(r) = s.recorder.as_mut() {
+            r.believed.push((t, [x, y, yaw]));
+        }
         s.send(SimEvent::Pose {
             time: s.core.time(),
             x,
@@ -598,6 +617,12 @@ impl RobotApi for SimRobot {
     }
 
     fn report(&mut self, key: &str, value: f64) {
+        let mut s = self.0.borrow_mut();
+        let t = s.core.time();
+        if let Some(r) = s.recorder.as_mut() {
+            r.reports.push((t, key.to_owned(), value));
+        }
+        drop(s);
         self.0.borrow().send(SimEvent::Report {
             key: key.to_owned(),
             value,
@@ -661,6 +686,7 @@ pub(crate) fn sim_thread(
         drag_log: Vec::new(),
         drag_next: 0,
         spring: None,
+        recorder: None,
     }));
     {
         let mut s = inner.borrow_mut();
@@ -717,10 +743,106 @@ pub(crate) fn sim_thread(
                 std::thread::sleep(Duration::from_millis(5));
                 continue;
             }
-            if s.tick().is_err() {
-                continue;
+            match s.tick() {
+                Err(_) => continue,
+                Ok(false) if !s.restart && !s.stop => {
+                    // The mission's time limit: stay here until reset or stopped.
+                    drop(s);
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Ok(_) => {}
             }
         }
+    }
+}
+
+/// What an unpaced graded run leaves behind.
+pub(crate) struct Headless {
+    pub recorder: Recorder,
+    pub end: Option<Result<RunEnd, String>>,
+    pub unstable: bool,
+    pub logs: Vec<String>,
+}
+
+/// Run the program (if any) flat out, then the rest of the mission up to its time limit,
+/// recording a trace.
+pub(crate) fn run_unpaced(
+    mut core: SimCore,
+    program: Option<&ProgramConfig>,
+    recorder: Recorder,
+) -> Headless {
+    core.reset();
+    let (etx, erx) = crossbeam_channel::unbounded();
+    let (ctx, crx) = crossbeam_channel::unbounded::<Command>();
+    let (input, _output) = triple_buffer::triple_buffer(&SimSnapshot::default());
+    let inner = Rc::new(RefCell::new(Inner {
+        core,
+        out: input,
+        commands: crx,
+        events: etx,
+        paced: false,
+        paused: false,
+        speed: 1.0,
+        failed: false,
+        stop: false,
+        restart: false,
+        pending_replay: None,
+        replay_to: None,
+        step_budget: 0,
+        stepping: false,
+        origin: Instant::now(),
+        origin_sim: 0.0,
+        flags: (false, 1.0),
+        channels: Vec::new(),
+        drag_log: Vec::new(),
+        drag_next: 0,
+        spring: None,
+        recorder: Some(recorder),
+    }));
+    {
+        let mut s = inner.borrow_mut();
+        if let Some(mut r) = s.recorder.take() {
+            r.start(&mut s.core);
+            s.recorder = Some(r);
+        }
+    }
+    let mut end = None;
+    if let Some(program) = program {
+        match Controller::new(&program.wasm, SimRobot(inner.clone()), &program.host) {
+            Ok(mut c) => end = Some(Ok(c.run())),
+            Err(e) => {
+                end = Some(Err(load_message(&e)));
+                SimRobot(inner.clone()).program_ended();
+            }
+        }
+    }
+    let mut unstable = inner.borrow().failed;
+    let stopped_with_error = matches!(end, Some(Ok(RunEnd::Stopped(_))) | Some(Err(_)));
+    if !unstable && !stopped_with_error {
+        loop {
+            match inner.borrow_mut().tick() {
+                Ok(true) => {}
+                Ok(false) => break,
+                Err(_) => {
+                    unstable = true;
+                    break;
+                }
+            }
+        }
+    }
+    drop(ctx);
+    let mut logs = Vec::new();
+    while let Ok(e) = erx.try_recv() {
+        if let SimEvent::Log { line, .. } = e {
+            logs.push(line);
+        }
+    }
+    let recorder = inner.borrow_mut().recorder.take().unwrap_or_default();
+    Headless {
+        recorder,
+        end,
+        unstable,
+        logs,
     }
 }
 

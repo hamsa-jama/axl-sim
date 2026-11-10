@@ -9,3 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+axl-world = { path = "../axl-world" }
+serde = { version = "1", features = ["derive"] }
+ron = "0.12"
+thiserror = "2"

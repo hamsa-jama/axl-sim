@@ -10,33 +10,33 @@ expression: "compile_asm(&starter(\"rover\")).mjcf"
   </default>
   <worldbody>
     <geom name="floor" type="plane" size="0 0 0.05" contype="2" conaffinity="1" group="0" friction="0.5 0.005 0.0001"/>
-    <body name="root" pos="0 0 0.0437">
+    <body name="root" pos="-0.016 0 0.0437">
       <freejoint name="root"/>
-      <geom name="p1_0_0" type="box" pos="0 0 -0.0016" size="0.0319 0.0639 0.0016" mass="0.017234529" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <geom name="p1_0_0" type="box" pos="0.016 0 -0.0016" size="0.0319 0.0639 0.0016" mass="0.017234529" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
       <geom name="p2_0_0" type="box" pos="0 0 0.0112" size="0.0319 0.0239 0.0112" mass="0.15" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
       <geom name="p3_0_0" type="box" pos="0.024 0 0.032" size="0.0079 0.0239 0.0096" mass="0.015" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
-      <geom name="p4_0_0" type="box" pos="0.004 0.036 -0.0152" size="0.0119 0.0199 0.012" mass="0.02975" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
-      <geom name="p5_0_0" type="box" pos="0.004 -0.036 -0.0152" size="0.0119 0.0199 0.012" mass="0.02975" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
-      <geom name="p10_0_0" type="box" pos="-0.024 0 -0.008" size="0.0079 0.0079 0.0048" mass="0.001148508" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
-      <geom name="p11_0_0" type="box" pos="-0.024 0 -0.0176" size="0.0079 0.0079 0.0048" mass="0.001148508" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
-      <geom name="p12_0_1" type="box" pos="-0.024 0 -0.0288" size="0.0079 0.0079 0.0064" mass="0.011967642" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
-      <geom name="p13_0_0" type="box" pos="0.024 0 -0.016" size="0.0079 0.0079 0.0128" mass="0.012" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <geom name="p4_0_0" type="box" pos="0.02 0.036 -0.0152" size="0.0119 0.0199 0.012" mass="0.02975" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <geom name="p5_0_0" type="box" pos="0.02 -0.036 -0.0152" size="0.0119 0.0199 0.012" mass="0.02975" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <geom name="p10_0_0" type="box" pos="-0.024 0 -0.0048" size="0.0079 0.0079 0.0048" mass="0.001148508" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <geom name="p11_0_0" type="box" pos="-0.024 0 -0.0144" size="0.0079 0.0079 0.0048" mass="0.001148508" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <geom name="p12_0_1" type="box" pos="-0.024 0 -0.0256" size="0.0079 0.0079 0.0064" mass="0.011967642" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
+      <geom name="p13_0_0" type="box" pos="0.04 0 -0.016" size="0.0079 0.0079 0.0128" mass="0.012" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
       <site name="imu" pos="0 0 0.0112" size="0.002" group="4"/>
       <site name="site_eye" pos="0.0352 0 0.032" size="0.002" group="4" zaxis="1 0 0"/>
-      <site name="site_color" pos="0.024 0 -0.0288" size="0.002" group="4" zaxis="0 0 -1"/>
-      <body name="b4_1" pos="0.004 0.0559 -0.0152">
+      <site name="site_color" pos="0.04 0 -0.0288" size="0.002" group="4" zaxis="0 0 -1"/>
+      <body name="b4_1" pos="0.02 0.0559 -0.0152">
         <joint name="j_left" type="hinge" pos="0 0 0" axis="0 1 0" damping="0.00001" frictionloss="0.004" armature="0.00015"/>
         <geom name="p4_1_0" type="cylinder" fromto="0 0 0 0 0.0025 0" size="0.006" mass="0.00525" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
         <geom name="p6_0_0" type="cylinder" fromto="0 -0.004 0 0 0.02 0" size="0.0024" mass="0.000348333" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
         <geom name="p8_0_0" type="cylinder" fromto="0 0.023 0 0 0.009 0" size="0.028" mass="0.02" contype="1" conaffinity="2" group="1" friction="1 0.005 0.0001" condim="4"/>
       </body>
-      <body name="b5_1" pos="0.004 -0.0559 -0.0152">
+      <body name="b5_1" pos="0.02 -0.0559 -0.0152">
         <joint name="j_right" type="hinge" pos="0 0 0" axis="0 1 0" damping="0.00001" frictionloss="0.004" armature="0.00015"/>
         <geom name="p5_1_0" type="cylinder" fromto="0 0 0 0 -0.0025 0" size="0.006" mass="0.00525" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
         <geom name="p7_0_0" type="cylinder" fromto="0 0.004 0 0 -0.02 0" size="0.0024" mass="0.000348333" contype="1" conaffinity="2" group="1" friction="0.35 0.005 0.0001"/>
         <geom name="p9_0_0" type="cylinder" fromto="0 -0.009 0 0 -0.023 0" size="0.028" mass="0.02" contype="1" conaffinity="2" group="1" friction="1 0.005 0.0001" condim="4"/>
       </body>
-      <body name="b12_1" pos="-0.024 0 -0.0352">
+      <body name="b12_1" pos="-0.024 0 -0.032">
         <joint name="j_12_ball" type="ball" pos="0 0 0" damping="0.000001"/>
         <geom name="p12_0_0" type="sphere" pos="0 0 0" size="0.008" mass="0.008032358" contype="1" conaffinity="2" group="1" friction="0.2 0.005 0.0001"/>
       </body>

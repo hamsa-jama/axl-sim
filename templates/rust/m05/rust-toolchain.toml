@@ -1,0 +1,6 @@
+# Lets rustup pick a Rust and install the WebAssembly target in this folder by itself, even when
+# no default toolchain is set.
+[toolchain]
+channel = "stable"
+targets = ["wasm32-wasip1"]
+profile = "minimal"

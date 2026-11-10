@@ -447,10 +447,12 @@ dependencies = [
  "axl-compile",
  "axl-host",
  "axl-hw",
+ "axl-missions",
  "axl-mujoco",
  "axl-parts",
  "axl-render",
  "axl-sim",
+ "axl-world",
  "bevy",
  "bevy_egui",
  "clap",
@@ -530,6 +532,12 @@ dependencies = [
 [[package]]
 name = "axl-missions"
 version = "0.1.0"
+dependencies = [
+ "axl-world",
+ "ron",
+ "serde",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "axl-mujoco"
@@ -571,8 +579,10 @@ dependencies = [
  "axl-compile",
  "axl-host",
  "axl-hw",
+ "axl-missions",
  "axl-mujoco",
  "axl-parts",
+ "axl-world",
  "crossbeam-channel",
  "thiserror 2.0.21",
  "triple_buffer",
@@ -594,6 +604,11 @@ dependencies = [
 [[package]]
 name = "axl-world"
 version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "bevy"
