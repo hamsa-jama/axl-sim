@@ -58,6 +58,9 @@ pub struct RenderOptions {
     pub env_mode: crate::diagnostics::EnvMode,
     /// Why `quality` is what it is, for the start-up log.
     pub quality_reason: String,
+    /// The app runs its screens (Home to Settings) on this stage: the builder and the
+    /// instruments are always installed and the stage content changes at run time.
+    pub screens: bool,
 }
 
 impl Default for RenderOptions {
@@ -74,6 +77,7 @@ impl Default for RenderOptions {
             disable: Default::default(),
             env_mode: Default::default(),
             quality_reason: "default".into(),
+            screens: false,
         }
     }
 }
@@ -160,6 +164,18 @@ impl Plugin for StagePlugin {
                 ),
             );
 
+        let kind = match &opts.content {
+            StageContent::Builder => crate::stage_swap::StageKind::Builder,
+            StageContent::Sandbox => crate::stage_swap::StageKind::Sim,
+            _ => crate::stage_swap::StageKind::Backdrop,
+        };
+        app.add_plugins(crate::stage_swap::StageSwapPlugin(kind));
+        if opts.screens || opts.content == StageContent::Builder {
+            app.add_plugins(crate::builder_view::BuilderPlugin);
+        }
+        if opts.screens || opts.content == StageContent::Sandbox {
+            app.add_plugins(crate::instruments::InstrumentsPlugin);
+        }
         match &opts.content {
             StageContent::Lookdev => {
                 app.insert_resource(SceneDef::load_lookdev());
@@ -167,12 +183,7 @@ impl Plugin for StagePlugin {
             StageContent::Parts(state) => {
                 app.add_plugins(crate::browser::BrowserPlugin(state.clone()));
             }
-            StageContent::Builder => {
-                app.add_plugins(crate::builder_view::BuilderPlugin);
-            }
-            StageContent::Sandbox => {
-                app.add_plugins(crate::instruments::InstrumentsPlugin);
-            }
+            StageContent::Builder | StageContent::Sandbox => {}
             StageContent::Stress(n) => {
                 app.insert_resource(StressBoxes(*n));
                 app.add_systems(Update, stress_source);
@@ -224,7 +235,6 @@ fn setup_stage(
     disable: Res<crate::diagnostics::DisableSet>,
     scene: Option<Res<SceneDef>>,
     stress: Option<Res<StressBoxes>>,
-    sandbox: Option<Res<crate::sim_view::SandboxScene>>,
     start_pose: Res<StartPose>,
 ) {
     let root = spawn_root(&mut commands);
@@ -255,12 +265,16 @@ fn setup_stage(
         };
         if let Some(scene) = scene {
             home = scene.home();
-            focus = spawn_scene(&mut commands, root, &scene, &mut builder);
-        }
-        if let Some(sb) = sandbox {
-            let (h, f) = crate::sim_view::spawn_sandbox(&mut commands, root, &sb, &mut builder);
-            home = h;
-            focus = f;
+            let backdrop = commands
+                .spawn((
+                    crate::stage_swap::BackdropRoot,
+                    Name::new("backdrop"),
+                    Transform::default(),
+                    Visibility::default(),
+                ))
+                .id();
+            commands.entity(root).add_child(backdrop);
+            focus = spawn_scene(&mut commands, backdrop, &scene, &mut builder);
         }
         if let Some(stress) = stress {
             home = CameraHome {

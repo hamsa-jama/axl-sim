@@ -25,6 +25,9 @@ use crate::scene::{PartMaterials, resolve_color};
 
 const MM: f32 = 0.001;
 
+/// Every entity the builder view has spawned.
+type AnyBuilderPart = Or<(With<BuilderPart>, With<GhostPart>)>;
+
 /// The builder and a few UI-facing facts about it.
 #[derive(Resource)]
 pub struct BuilderRes {
@@ -96,6 +99,7 @@ impl Plugin for BuilderPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BuilderCursor>()
             .init_resource::<BuilderEntities>()
+            .init_resource::<BuilderSyncState>()
             .insert_resource(SurfacePicking)
             .add_systems(Startup, builder_setup)
             .add_systems(
@@ -105,8 +109,10 @@ impl Plugin for BuilderPlugin {
                     (builder_sync, builder_ghost, builder_focus, builder_overlays)
                         .chain()
                         .after(builder_input),
-                ),
-            );
+                )
+                    .run_if(crate::stage_swap::in_builder),
+            )
+            .add_systems(Update, builder_leave);
     }
 }
 
@@ -117,6 +123,31 @@ fn builder_setup(mut commands: Commands, lib: Res<PartLibrary>, mut grid: ResMut
         default_color: None,
     });
     grid.stud_dots = true;
+}
+
+/// What the robot and ghost entities were last built from, so they are rebuilt only on change.
+#[derive(Resource, Default)]
+pub struct BuilderSyncState {
+    rev: Option<u64>,
+    ghost: Option<GhostSig>,
+}
+
+/// Leaving the builder takes its entities off the stage; coming back builds them again.
+fn builder_leave(
+    mut commands: Commands,
+    kind: Res<crate::stage_swap::StageKind>,
+    parts: Query<Entity, AnyBuilderPart>,
+    mut ents: ResMut<BuilderEntities>,
+    mut state: ResMut<BuilderSyncState>,
+) {
+    if !kind.is_changed() || *kind == crate::stage_swap::StageKind::Builder {
+        return;
+    }
+    for e in &parts {
+        commands.entity(e).despawn();
+    }
+    ents.0.clear();
+    *state = BuilderSyncState::default();
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -283,8 +314,9 @@ fn builder_sync(
     mut parts: ResMut<PartMaterials>,
     mut lib: ResMut<PartLibrary>,
     quality: Res<ActiveQuality>,
-    mut last: Local<Option<u64>>,
+    mut state: ResMut<BuilderSyncState>,
 ) {
+    let last = &mut state.rev;
     let Some(res) = res else { return };
     let (Ok(root), true) = (root.single(), *last != Some(res.b.rev)) else {
         return;
@@ -328,8 +360,9 @@ fn builder_ghost(
     mut meshes: ResMut<Assets<Mesh>>,
     mut std_mats: ResMut<Assets<StandardMaterial>>,
     mut lib: ResMut<PartLibrary>,
-    mut last: Local<Option<GhostSig>>,
+    mut state: ResMut<BuilderSyncState>,
 ) {
+    let last = &mut state.ghost;
     let Some(res) = res else { return };
     let Ok(root) = root.single() else { return };
     let sig: Option<GhostSig> = res.b.ghost.as_ref().filter(|g| g.placed).map(|g| {

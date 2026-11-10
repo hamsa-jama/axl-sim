@@ -247,7 +247,11 @@ fn what_is_drawn_matches_what_is_simulated() {
     assert!((r.quat[0] - half.cos()).abs() < 1e-12 && (r.quat[2] - half.sin()).abs() < 1e-12);
     assert!(r.quat[1].abs() < 1e-12 && r.quat[3].abs() < 1e-12);
     // Euler sequence xyz is intrinsic: rotating 90 degrees about x then 90 about z.
-    let q = euler_xyz_quat([1.5707963267948966, 0.0, 1.5707963267948966]);
+    let q = euler_xyz_quat([
+        std::f64::consts::FRAC_PI_2,
+        0.0,
+        std::f64::consts::FRAC_PI_2,
+    ]);
     let want = [0.5, 0.5, -0.5, 0.5];
     assert!(
         q.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-12),

@@ -762,7 +762,12 @@ impl Plugin for InstrumentsPlugin {
             .insert_resource(Overlays::default())
             .init_resource::<Trails>()
             .init_resource::<LiveView>()
-            .add_systems(Update, (overlay_keys, draw_overlays, apply_xray).chain());
+            .add_systems(
+                Update,
+                (overlay_keys, draw_overlays, apply_xray)
+                    .chain()
+                    .run_if(crate::stage_swap::in_sim),
+            );
         let mut store = app.world_mut().resource_mut::<GizmoConfigStore>();
         *store.config_mut::<OverlayGizmos>().0 = solid;
         *store.config_mut::<DashedGizmos>().0 = dashed;

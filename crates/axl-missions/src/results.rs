@@ -115,6 +115,25 @@ fn deg(r: f64) -> String {
     format!("{:.0} degrees", r.to_degrees())
 }
 
+/// The zones that the criteria (and star rules) of a mission refer to, in name order: the areas
+/// worth marking on the floor.
+pub fn zone_names(m: &MissionDef) -> Vec<String> {
+    let mut v: Vec<String> = m
+        .criteria
+        .iter()
+        .chain(m.stars.iter().flat_map(|s| s.criteria.iter()))
+        .filter_map(|c| match c {
+            Criterion::ReachZone { zone, .. } | Criterion::FinishWithin { zone, .. } => {
+                Some(zone.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    v.sort();
+    v.dedup();
+    v
+}
+
 /// The headline of the brief: its first Markdown heading, or the title.
 pub fn goal_line(m: &MissionDef) -> String {
     blocks(&m.brief_md)
@@ -382,6 +401,15 @@ mod tests {
         assert!(robot_text(&m5).contains("time-of-flight"));
         let m12 = crate::library::mission("m12").unwrap();
         assert!(robot_text(&m12).contains("at most 120 parts"));
+        assert_eq!(
+            zone_names(&crate::library::mission("m11").unwrap()),
+            ["goal"]
+        );
+        assert_eq!(
+            zone_names(&crate::library::mission("m12").unwrap()),
+            ["top_25"]
+        );
+        assert!(zone_names(&crate::library::mission("m01").unwrap()).is_empty());
         let m7 = crate::library::mission("m07").unwrap();
         assert!(rules(&m7).iter().any(|r| r.contains("motor_speed")));
     }

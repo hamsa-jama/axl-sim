@@ -72,6 +72,7 @@ pub fn builder_panels(
     mut ui_state: ResMut<BuilderUi>,
     mut inset: ResMut<LeftInset>,
     top: Res<TopInset>,
+    mut nav: Option<ResMut<crate::nav::Nav>>,
 ) -> Result {
     let Some(mut res) = res else { return Ok(()) };
     let ctx = contexts.ctx_mut()?;
@@ -207,8 +208,10 @@ pub fn builder_panels(
                 .on_disabled_hover_text("Fix the errors in the validation panel first.")
                 .clicked()
             {
-                *status =
-                    "Simulate arrives with the compiler and hardware milestones (M5, M6).".into();
+                match nav.as_mut() {
+                    Some(n) => n.go(crate::nav::Action::SimulateDesign),
+                    None => *status = "Open the robot in the app to simulate it.".into(),
+                }
             }
             ui.separator();
             ui.label(format!("{} parts", b.assembly.parts.len()));

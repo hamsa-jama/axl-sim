@@ -61,7 +61,7 @@ impl ToolchainStatus {
     /// would see it.
     pub fn detect_in(project: Option<&Path>) -> Self {
         let dir = project.filter(|p| p.is_dir());
-        let in_dir = |prog: &str| {
+        let in_dir = |prog: &std::ffi::OsStr| {
             let mut c = Command::new(prog);
             if let Some(d) = dir {
                 c.current_dir(d);
@@ -76,7 +76,7 @@ impl ToolchainStatus {
                 .status()
                 .is_ok_and(|s| s.success())
         };
-        let rust_target = in_dir("rustc")
+        let rust_target = in_dir(std::ffi::OsStr::new("rustc"))
             .args(["--print", "sysroot"])
             .output()
             .ok()
@@ -90,7 +90,7 @@ impl ToolchainStatus {
             });
         Self {
             rustup: runs("rustup"),
-            cargo: in_dir("cargo")
+            cargo: in_dir(cargo_program().as_os_str())
                 .arg("--version")
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -184,9 +184,33 @@ fn is_wasi_sdk(p: &Path) -> bool {
     p.join(clang).is_file() && p.join("share/wasi-sysroot").is_dir()
 }
 
+/// Toolchain locations the learner chose in Settings: wasi-sdk's folder and the `cargo` program.
+static OVERRIDES: std::sync::Mutex<(Option<PathBuf>, Option<PathBuf>)> =
+    std::sync::Mutex::new((None, None));
+
+/// Use these locations before searching (`None` goes back to searching). Called by the app from
+/// the saved settings.
+pub fn set_overrides(wasi_sdk: Option<PathBuf>, cargo: Option<PathBuf>) {
+    if let Ok(mut o) = OVERRIDES.lock() {
+        *o = (wasi_sdk, cargo);
+    }
+}
+
+/// The `cargo` to run: the chosen one, else the one on the path.
+pub fn cargo_program() -> std::ffi::OsString {
+    OVERRIDES
+        .lock()
+        .ok()
+        .and_then(|o| o.1.clone())
+        .map_or_else(|| "cargo".into(), PathBuf::into_os_string)
+}
+
 /// Find wasi-sdk (see [`ToolchainStatus::detect`]).
 pub fn find_wasi_sdk() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(p) = OVERRIDES.lock().ok().and_then(|o| o.0.clone()) {
+        candidates.push(p);
+    }
     if let Some(p) = std::env::var_os("WASI_SDK_PATH") {
         candidates.push(PathBuf::from(p));
     }
@@ -466,7 +490,7 @@ pub fn build(req: &BuildRequest, mut log: impl FnMut(&str)) -> BuildOutcome {
             }
         }
         Lang::Rust => {
-            let mut cmd = Command::new("cargo");
+            let mut cmd = Command::new(cargo_program());
             for k in &req.env_remove {
                 cmd.env_remove(k);
             }

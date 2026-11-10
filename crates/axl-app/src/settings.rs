@@ -32,6 +32,10 @@ pub struct Settings {
     pub invert_orbit: bool,
     /// Size of the whole UI, 1.0 (100%) to 2.0 (200%).
     pub ui_scale: f32,
+    /// Folder of wasi-sdk, when it is not where AXL looks (empty: search).
+    pub wasi_sdk_path: String,
+    /// The `cargo` program, when it is not on the path (empty: use the path).
+    pub cargo_path: String,
 }
 
 impl Default for Settings {
@@ -44,6 +48,8 @@ impl Default for Settings {
             grid_opacity_simulate: OPACITY_SIMULATE,
             invert_orbit: false,
             ui_scale: 1.0,
+            wasi_sdk_path: String::new(),
+            cargo_path: String::new(),
         }
     }
 }

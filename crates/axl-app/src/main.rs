@@ -14,8 +14,10 @@ mod gui;
 mod headless;
 #[cfg(feature = "gui")]
 mod mission_ui;
+mod nav;
 #[cfg(feature = "gui")]
 mod sandbox;
+mod screens;
 #[cfg(feature = "gui")]
 mod sim_ui;
 // Settings name `axl_render` types (quality, units), so only the window build has them.
