@@ -49,3 +49,41 @@ pub fn mission(id: &str) -> Result<MissionDef, MissionError> {
         .find(|m| m.id == id)
         .ok_or_else(|| MissionError::Unknown(id.to_owned()))
 }
+
+/// The name of a chapter of the curriculum.
+pub fn chapter_title(chapter: u8) -> &'static str {
+    match chapter {
+        1 => "Chapter 1: Make it move",
+        2 => "Chapter 2: Sense the world",
+        3 => "Chapter 3: Close the loop",
+        4 => "Chapter 4: Think and build",
+        _ => "More missions",
+    }
+}
+
+/// The missions grouped by chapter, in curriculum order.
+pub fn chapters() -> Result<Vec<(u8, Vec<MissionDef>)>, MissionError> {
+    let mut out: Vec<(u8, Vec<MissionDef>)> = Vec::new();
+    for m in builtin_missions()? {
+        match out.last_mut() {
+            Some((c, v)) if *c == m.chapter => v.push(m),
+            _ => out.push((m.chapter, vec![m])),
+        }
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn twelve_missions_in_four_named_chapters() {
+        let ch = chapters().unwrap();
+        assert_eq!(ch.iter().map(|(c, _)| *c).collect::<Vec<_>>(), [1, 2, 3, 4]);
+        assert_eq!(ch.iter().map(|(_, v)| v.len()).sum::<usize>(), 12);
+        for (c, _) in &ch {
+            assert!(chapter_title(*c).starts_with("Chapter"));
+        }
+    }
+}

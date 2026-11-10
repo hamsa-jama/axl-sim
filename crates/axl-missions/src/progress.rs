@@ -11,6 +11,28 @@ use crate::learn::fsrs::{Card, Grade};
 /// Current `version` of `progress.ron`.
 pub const PROGRESS_VERSION: u32 = 1;
 
+/// Where the learner is with one mission.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Status {
+    /// Never run.
+    New,
+    /// Run at least once, not passed yet.
+    Tried,
+    /// Passed.
+    Passed,
+}
+
+impl Status {
+    /// Word for the UI.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::New => "Not started",
+            Self::Tried => "In progress",
+            Self::Passed => "Passed",
+        }
+    }
+}
+
 /// Progress on one mission.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct MissionProgress {
@@ -44,6 +66,9 @@ pub struct Progress {
     /// Memory state per idea (the first concept of a mission), for the warm-ups.
     #[serde(default)]
     pub cards: BTreeMap<String, Card>,
+    /// The mission opened last, for the Home screen's Continue button.
+    #[serde(default)]
+    pub last_mission: Option<String>,
 }
 
 fn version_one() -> u32 {
@@ -56,6 +81,7 @@ impl Default for Progress {
             version: PROGRESS_VERSION,
             missions: BTreeMap::new(),
             cards: BTreeMap::new(),
+            last_mission: None,
         }
     }
 }
@@ -124,6 +150,30 @@ impl Progress {
         } else {
             p.failed_runs += 1;
         }
+    }
+
+    /// Remember that the learner opened mission `id` (Home's Continue goes back to it).
+    pub fn set_last(&mut self, id: &str) {
+        self.last_mission = Some(id.to_owned());
+    }
+
+    /// Where the learner is with a mission.
+    pub fn status(&self, id: &str) -> Status {
+        match self.missions.get(id) {
+            Some(p) if p.completed_day.is_some() => Status::Passed,
+            Some(p) if p.attempts > 0 => Status::Tried,
+            _ => Status::New,
+        }
+    }
+
+    /// Missions passed, and stars earned, among `ids`.
+    pub fn totals<'a>(&self, ids: impl IntoIterator<Item = &'a str>) -> (usize, u32) {
+        ids.into_iter().fold((0, 0), |(n, st), id| {
+            (
+                n + usize::from(self.status(id) == Status::Passed),
+                st + u32::from(self.stars(id)),
+            )
+        })
     }
 
     /// Stars on a mission.
@@ -204,6 +254,28 @@ mod tests {
 
     fn temp(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("axl-{name}-{}.ron", std::process::id()))
+    }
+
+    #[test]
+    fn status_totals_and_the_last_mission() {
+        let mut p = Progress::default();
+        assert_eq!(p.status("m01"), Status::New);
+        p.record_run("m01", false, 0, false, None, 10.0);
+        assert_eq!(p.status("m01"), Status::Tried);
+        p.record_run("m01", true, 2, false, Some("Actuators"), 11.0);
+        p.record_run("m02", true, 3, false, None, 11.0);
+        p.record_run("m03", false, 0, false, None, 11.0);
+        assert_eq!(p.status("m01"), Status::Passed);
+        assert_eq!(p.totals(["m01", "m02", "m03", "m04"]), (2, 5));
+        assert_eq!(p.last_mission, None);
+        p.set_last("m03");
+        let f = temp("last");
+        p.save(&f).unwrap();
+        assert_eq!(Progress::load(&f).last_mission.as_deref(), Some("m03"));
+        let _ = std::fs::remove_file(&f);
+        // A file written before `last_mission` existed still loads.
+        let old = "(version: 1, missions: {})";
+        assert_eq!(ron::from_str::<Progress>(old).unwrap().last_mission, None);
     }
 
     #[test]
