@@ -664,6 +664,16 @@ pub fn gpu_summary_lines(gpu: &[(String, f64)], frame_ms: f64) -> Vec<String> {
     out
 }
 
+/// Parts made after a quality change use that preset's material variation (existing parts keep
+/// the materials they have).
+fn sync_part_variation(quality: Res<ActiveQuality>, parts: Option<ResMut<PartMaterials>>) {
+    if let Some(mut parts) = parts
+        && quality.is_changed()
+    {
+        parts.vary = quality.0.settings().part_variation;
+    }
+}
+
 #[cfg(test)]
 mod perf_summary_tests {
     use super::*;
@@ -700,15 +710,5 @@ mod perf_summary_tests {
         assert_eq!(lines[2], "perf: gpu  20.70 ms  render/main_opaque_pass_3d");
         assert!(lines.iter().all(|l| !l.contains("main_pass/main_opaque")));
         assert_eq!(lines.len(), 5);
-    }
-}
-
-/// Parts made after a quality change use that preset's material variation (existing parts keep
-/// the materials they have).
-fn sync_part_variation(quality: Res<ActiveQuality>, parts: Option<ResMut<PartMaterials>>) {
-    if let Some(mut parts) = parts
-        && quality.is_changed()
-    {
-        parts.vary = quality.0.settings().part_variation;
     }
 }
