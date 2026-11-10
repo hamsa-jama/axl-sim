@@ -27,9 +27,9 @@ fn dbg_trace() {
     let cat = Catalog::builtin();
     let asm = axl_sim::mission::robot_assembly(&m, &cat, None).unwrap();
     let wasm = std::fs::read(path).unwrap();
-    let (run, _) = axl_sim::mission::run_seed(&m, &asm, &cat, 1, Some(&wasm), &Default::default()).unwrap();
+    let (run, _) = axl_sim::mission::run_seed(&m, &asm, &cat, std::env::var("DBG_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or(1), Some(&wasm), &Default::default()).unwrap();
     for s in run.trace.samples.iter().step_by(std::env::var("DBG_STEP").ok().and_then(|s| s.parse().ok()).unwrap_or(50)) {
-        eprintln!("t {:.2} x {:.4} y {:.4} yaw {:.3} v {:.3} front {:.3} tilt {:.2} z {:.3}", s.t, s.pos[0], s.pos[1], s.yaw, s.speed, s.front[0], s.tilt, s.pos[2]);
+        eprintln!("t {:.2} x {:.4} y {:.4} yaw {:.3} v {:.3} front {:.3} tilt {:.2} z {:.3} px {:.4} py {:.4}", s.t, s.pos[0], s.pos[1], s.yaw, s.speed, s.front[0], s.tilt, s.pos[2], s.pivot[0], s.pivot[1]);
     }
 }
 

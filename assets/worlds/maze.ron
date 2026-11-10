@@ -3,5 +3,5 @@
     id: "maze",
     name: "Maze",
     spawn: (x: 0.125, y: 0.125, yaw: 0.0),
-    maze: Some((cells: 6, cell_m: 0.25, height: 0.1, thickness: 0.012, layout_seeds: [11, 22, 33])),
+    maze: Some((cells: 6, cell_m: 0.25, height: 0.1, thickness: 0.012, layout_seeds: [11, 22, 13])),
 )
