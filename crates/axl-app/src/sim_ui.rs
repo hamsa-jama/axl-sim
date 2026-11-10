@@ -837,7 +837,10 @@ pub fn instruments_ui(
         let b = live.bodies.get(sel).copied();
         egui::Window::new("Inspector")
             .open(&mut open)
-            .default_pos(egui::pos2((free.right() - 350.0).max(free.left() + 8.0), free.top() + 52.0))
+            .default_pos(egui::pos2(
+                (free.right() - 350.0).max(free.left() + 8.0),
+                free.top() + 52.0,
+            ))
             .constrain_to(free)
             .resizable(false)
             .show(&ctx, |ui| {
@@ -893,10 +896,12 @@ pub fn instruments_ui(
             });
     }
     if overlays.sensors {
-        let painter = ctx.layer_painter(egui::LayerId::new(
-            egui::Order::Foreground,
-            egui::Id::new("sensor_labels"),
-        ));
+        let painter = ctx
+            .layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("sensor_labels"),
+            ))
+            .with_clip_rect(free);
         for s in &live.sensors {
             let tip = [
                 s.origin[0] + s.axis[0] * s.range * 0.5,
@@ -946,7 +951,10 @@ fn plotter(ctx: &egui::Context, free: egui::Rect, ins: &mut Instruments) {
     let mut export = false;
     egui::Window::new("Plots")
         .open(&mut open)
-        .default_pos(egui::pos2((free.right() - 580.0).max(free.left() + 8.0), free.bottom() - 340.0))
+        .default_pos(egui::pos2(
+            (free.right() - 580.0).max(free.left() + 8.0),
+            free.bottom() - 410.0,
+        ))
         .default_size(egui::vec2(560.0_f32.min(free.width() - 16.0), 250.0))
         .constrain_to(free)
         .show(ctx, |ui| {
