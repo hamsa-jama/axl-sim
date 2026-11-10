@@ -105,3 +105,11 @@ a built program over (`CodeScreen::request_submit`) and a thread grades it. Refe
 `missions/solutions/{c,rust}/mNN`, the m12 design `missions/solutions/m12.axlbot`; templates:
 `templates/{c,rust}/mNN`. `cargo xtask sdk-check` builds all of them and grades them headless
 (templates must not pass, solutions must). Choices: decision 0015.
+
+## After M10 (so far)
+
+`cargo xtask package` stages `axl`, the MuJoCo library (rpath `$ORIGIN` or `@executable_path`),
+`assets/`, `sdk/`, `templates/`, the guide, the README and the accuracy report, then packs them
+with the system `tar` (`.tar.gz`, `.zip`) or `hdiutil` (`.dmg`). `release.yml` runs it on three
+OSes for tags `v*`. The UI scale is a `UiScale` resource in `gui.rs`, applied with egui's zoom
+factor and stored as `ui_scale` in `settings.ron`.

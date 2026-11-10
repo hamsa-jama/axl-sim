@@ -30,6 +30,8 @@ pub struct Settings {
     pub grid_opacity_simulate: f32,
     /// Reverse the orbit direction.
     pub invert_orbit: bool,
+    /// Size of the whole UI, 1.0 (100%) to 2.0 (200%).
+    pub ui_scale: f32,
 }
 
 impl Default for Settings {
@@ -41,6 +43,7 @@ impl Default for Settings {
             grid_opacity_builder: OPACITY_BUILDER,
             grid_opacity_simulate: OPACITY_SIMULATE,
             invert_orbit: false,
+            ui_scale: 1.0,
         }
     }
 }
@@ -89,6 +92,11 @@ impl Settings {
         }
         s.grid_opacity_builder = s.grid_opacity_builder.clamp(0.0, 1.0);
         s.grid_opacity_simulate = s.grid_opacity_simulate.clamp(0.0, 1.0);
+        s.ui_scale = if s.ui_scale.is_finite() {
+            s.ui_scale.clamp(1.0, 2.0)
+        } else {
+            1.0
+        };
         s.version = SETTINGS_VERSION;
         Ok(s)
     }
@@ -157,6 +165,15 @@ mod tests {
         assert_eq!(s.grid_opacity_builder, 0.60);
         assert_eq!(s.grid_opacity_simulate, 0.25);
         assert_eq!(s.quality, None);
+    }
+
+    #[test]
+    fn ui_scale_is_kept_between_100_and_200_percent() {
+        let s = Settings::from_ron("(ui_scale: 3.5)").unwrap();
+        assert_eq!(s.ui_scale, 2.0);
+        let s = Settings::from_ron("(ui_scale: 0.2)").unwrap();
+        assert_eq!(s.ui_scale, 1.0);
+        assert_eq!(Settings::default().ui_scale, 1.0);
     }
 
     #[test]

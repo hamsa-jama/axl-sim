@@ -238,6 +238,7 @@ pub fn run(args: &Args) -> AppExit {
     .insert_resource(CameraSettings {
         invert_orbit: current.invert_orbit,
     })
+    .insert_resource(UiScale(current.ui_scale))
     .insert_resource(SettingsStore { current, path })
     .init_resource::<LeftInset>()
     .init_resource::<TopInset>()
@@ -391,8 +392,13 @@ fn control_bar(
     home: Res<CameraHome>,
     mut cams: Query<&mut Transform, With<ViewCamera>>,
     mut top: ResMut<TopInset>,
+    mut ui_scale: ResMut<UiScale>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
+    ui_scale.keys(ctx);
+    if (ctx.zoom_factor() - ui_scale.0).abs() > f32::EPSILON {
+        ctx.set_zoom_factor(ui_scale.0);
+    }
     let mut root = viewport_ui(ctx);
     let bar = egui::Panel::top("controls").show(&mut root, |ui| {
         ui.horizontal_wrapped(|ui| {
@@ -463,6 +469,20 @@ fn control_bar(
                     }
                 });
             ui.checkbox(&mut cam_settings.invert_orbit, "Invert orbit");
+            ui.label("UI scale");
+            let mut percent = (ui_scale.0 * 100.0).round() as i32;
+            if ui
+                .add(
+                    egui::DragValue::new(&mut percent)
+                        .range(100..=200)
+                        .speed(5)
+                        .suffix("%"),
+                )
+                .on_hover_text("Ctrl and plus, Ctrl and minus, Ctrl and 0")
+                .changed()
+            {
+                ui_scale.0 = percent as f32 / 100.0;
+            }
             if ui.button("Reset view").clicked()
                 && let Ok(mut tf) = cams.single_mut()
             {
@@ -616,6 +636,7 @@ fn persist_settings(
     quality: Res<ActiveQuality>,
     grid: Res<GridSettings>,
     cam: Res<CameraSettings>,
+    ui_scale: Res<UiScale>,
     mut store: ResMut<SettingsStore>,
     mut started: Local<bool>,
 ) {
@@ -633,6 +654,7 @@ fn persist_settings(
     next.grid_opacity_builder = grid.opacity_builder;
     next.grid_opacity_simulate = grid.opacity_simulate;
     next.invert_orbit = cam.invert_orbit;
+    next.ui_scale = ui_scale.0;
     if next != store.current {
         store.current = next;
         save(&store);
@@ -682,5 +704,48 @@ mod backend_tests {
         assert!(unsupported_backend(Some("vulkan,gl")).is_none());
         assert!(unsupported_backend(None).is_none());
         assert!(unsupported_backend(Some("")).is_none());
+    }
+}
+
+/// The size of the whole UI (spec: 100 to 200%), kept in `settings.ron`.
+#[derive(Resource)]
+struct UiScale(f32);
+
+impl UiScale {
+    /// Ctrl and plus, Ctrl and minus (steps of 10%) and Ctrl and 0 (back to 100%).
+    fn keys(&mut self, ctx: &egui::Context) {
+        let (plus, minus, zero) = ctx.input(|i| {
+            let c = i.modifiers.command;
+            (
+                c && (i.key_pressed(egui::Key::Plus) || i.key_pressed(egui::Key::Equals)),
+                c && i.key_pressed(egui::Key::Minus),
+                c && i.key_pressed(egui::Key::Num0),
+            )
+        });
+        if plus {
+            self.0 = step_scale(self.0, 1);
+        } else if minus {
+            self.0 = step_scale(self.0, -1);
+        } else if zero {
+            self.0 = 1.0;
+        }
+    }
+}
+
+/// One 10% step up or down, kept between 100% and 200%.
+fn step_scale(scale: f32, dir: i32) -> f32 {
+    (((scale * 10.0).round() + dir as f32) / 10.0).clamp(1.0, 2.0)
+}
+
+#[cfg(test)]
+mod scale_tests {
+    use super::*;
+
+    #[test]
+    fn steps_stop_at_100_and_200_percent() {
+        assert_eq!(step_scale(1.0, -1), 1.0);
+        assert_eq!(step_scale(1.0, 1), 1.1);
+        assert_eq!(step_scale(1.9, 1), 2.0);
+        assert_eq!(step_scale(2.0, 1), 2.0);
     }
 }
