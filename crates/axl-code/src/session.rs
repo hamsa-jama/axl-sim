@@ -30,9 +30,10 @@ pub struct CodeSession {
 impl CodeSession {
     /// A session for `project`.
     pub fn new(project: Project, sdk: PathBuf) -> Self {
+        let toolchain_dir = project.dir.clone();
         Self {
             project,
-            toolchain: ToolchainStatus::detect(),
+            toolchain: ToolchainStatus::detect_in(Some(&toolchain_dir)),
             log: Vec::new(),
             diagnostics: Vec::new(),
             wasm: None,
@@ -43,7 +44,7 @@ impl CodeSession {
 
     /// Look for the toolchain again.
     pub fn refresh_toolchain(&mut self) {
-        self.toolchain = ToolchainStatus::detect();
+        self.toolchain = ToolchainStatus::detect_in(Some(&self.project.dir));
     }
 
     /// A build is running.
@@ -118,6 +119,7 @@ impl CodeSession {
         self.log.clear();
         self.diagnostics.clear();
         self.wasm = None;
+        self.refresh_toolchain();
         Ok(())
     }
 }

@@ -1,6 +1,7 @@
 //! Learner programs (built from C with wasi-sdk) driving the Rover on the sim thread.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use axl_build::starter::build_starter;
@@ -64,7 +65,11 @@ fn skip(what: &str) {
 
 /// Build the Rust m01 template for wasm32-wasip1 (a copy in a temp folder, like a learner's).
 fn build_rust_template() -> Option<Vec<u8>> {
-    if !ToolchainStatus::detect().rust_ready() {
+    // Like a learner: a copy outside the repo (so the repo's rust-toolchain.toml does not apply),
+    // with no toolchain forced through the environment.
+    // SAFETY: only this test binary reads the variable, and it does so after this point.
+    unsafe { std::env::remove_var("RUSTUP_TOOLCHAIN") };
+    if Command::new("rustup").arg("--version").output().is_err() {
         return None;
     }
     let data = std::env::temp_dir().join(format!("axl-prog-{}-rust", std::process::id()));
@@ -77,6 +82,13 @@ fn build_rust_template() -> Option<Vec<u8>> {
         &repo().join("sdk"),
     )
     .unwrap();
+    // Here the wasm32-wasip1 target cannot be downloaded; CI can, and requires the build.
+    if std::env::var_os("AXL_REQUIRE_TOOLCHAINS").is_none()
+        && !ToolchainStatus::detect_in(Some(&project)).rust_ready()
+    {
+        let _ = std::fs::remove_dir_all(&data);
+        return None;
+    }
     let out = build(
         &BuildRequest {
             lang: Lang::Rust,
