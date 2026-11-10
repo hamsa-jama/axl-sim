@@ -20,7 +20,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-Version 1 is complete apart from the owner checks. M10 Release is accepted and merged into `main` (merge commit MERGE_HASH, tag `m10-done` local, push command in O24); M0 to M9 are accepted too. Nothing is in progress. The only things left are the owner checks below: nothing in the repository needs more work.
+Version 1 is complete apart from the owner checks. M10 Release is accepted and merged into `main` (merge commit b27b74d, tag `m10-done` local, push command in O24); M0 to M9 are accepted too. Nothing is in progress. The only things left are the owner checks below: nothing in the repository needs more work.
 
 ### Owner checks still open
 
@@ -32,9 +32,9 @@ Version 1 is complete apart from the owner checks. M10 Release is accepted and m
 | O17 | Push the `m08-done` tag | `git fetch origin && git tag -a m08-done -m "M8 instruments accepted" 1910466 && git push origin m08-done` |
 | O19 | Push the `m09-done` tag | `git fetch origin && git tag -a m09-done -m "M9 missions accepted" 7e01523 && git push origin m09-done` |
 | O21 | Packages build and start on Windows and macOS (Linux was checked here) | Push a throwaway tag, for example `git tag v0.0.0-test && git push origin v0.0.0-test` (its Cargo version check fails by design; to test the packaging itself run the `release` workflow on a branch with `workflow_dispatch` added, or use a tag equal to the Cargo version on a fork). Download the packages from the run, unpack each and start `axl` (on macOS right-click `AXL.app`, Open). The window should open and `axl --headless --version` should print `axl 1.0.0`. Delete the tag afterwards: `git push origin :refs/tags/v0.0.0-test`. |
-| O22 | The `v1.0.0` tag (not created here) | `git fetch origin && git tag -a v1.0.0 -m "AXL 1.0.0" MERGE_HASH && git push origin v1.0.0`. The release workflow builds the three packages, runs the accuracy suite and attaches the packages and `report.md` and `report.json` to the release. Check that the release page lists three packages and the two report files. |
+| O22 | The `v1.0.0` tag (not created here) | `git fetch origin && git tag -a v1.0.0 -m "AXL 1.0.0" b27b74d && git push origin v1.0.0`. The release workflow builds the three packages, runs the accuracy suite and attaches the packages and `report.md` and `report.json` to the release. Check that the release page lists three packages and the two report files. |
 | O23 | A first-time tester finishes m01 in under 30 minutes | 1. Find someone who has not used AXL and give them the Linux, Windows or macOS package of the release (or `cargo run -p axl-app --release` on a prepared machine) and `docs/guide.md`; no other help. 2. Start the stopwatch when they open `axl`. 3. They press "Start mission m01" on Home, read the brief, write the program in the editor (the template shows the shape), press "Build and Run", then "Check my solution on every seed". 4. Stop the watch at the Results screen showing "Passed". 5. Pass if it took under 30 minutes. Note where they got stuck (toolchain chip, the prediction step, the Build and Run step, reading the editor) and send it back as an issue. On a machine without wasi-sdk the chip says what to install; count that time too. |
-| O24 | Push the `m10-done` tag | `git fetch origin && git tag -a m10-done -m "M10 release accepted" MERGE_HASH && git push origin m10-done` (the tag exists locally; the sandbox refused the push, decision 0004). |
+| O24 | Push the `m10-done` tag | `git fetch origin && git tag -a m10-done -m "M10 release accepted" b27b74d && git push origin m10-done` (the tag exists locally; the sandbox refused the push, decision 0004). |
 
 Known gaps and spec problems found in M9 and M10:
 
