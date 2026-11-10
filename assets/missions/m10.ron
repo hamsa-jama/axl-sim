@@ -1,0 +1,42 @@
+(
+    version: 1,
+    id: "m10",
+    title: "Heading Lock",
+    chapter: 4,
+    concepts: ["Gyro", "Bias", "Sensor fusion"],
+    world: (id: "test_track"),
+    robot: Starter("rover"),
+    time_limit_s: 8.0,
+    grading_seeds: [1, 2, 3],
+    battery_soc: (0.7, 1.0),
+    events: [
+        Push(t: 0.5, impulse_ns: (0.0, 0.04, 0.0)),
+        Push(t: 1.0, impulse_ns: (0.0, -0.03, 0.0)),
+    ],
+    brief_md: r#"
+## Drive straight, whatever happens
+
+Drive **1.5 m straight ahead** and stop. Someone pushes the Rover sideways at 0.5 s and again at 1.0 s.
+At the end the Rover must be less than **30 mm** to the side of where it should be and its heading
+less than **2 degrees** off.
+
+The wheel counts cannot feel a push, but the **gyroscope** can: `axl_imu_gyro` gives the turning rate.
+Add up rate times time to get the heading. Beware: a gyroscope has a small *bias*, a constant
+error in its reading. Measure it while the Rover stands still, then subtract it.
+"#,
+    predict: Some((
+        question: "Both motors get the same power for 3 seconds and nothing corrects the pushes. How far to the side will the Rover end up?",
+        unit: "mm",
+        measured: "open_loop_drift_mm",
+    )),
+    criteria: [HeadingLock(distance_m: 1.5, max_lateral_m: 0.03, max_yaw_rad: 0.03490658503988659)],
+    stars: (
+        (text: "Less than 10 mm sideways", criteria: [HeadingLock(distance_m: 1.5, max_lateral_m: 0.01, max_yaw_rad: 0.03490658503988659)]),
+        (text: "Heading less than 0.5 degrees off", criteria: [HeadingLock(distance_m: 1.5, max_lateral_m: 0.01, max_yaw_rad: 0.008726646259971648)]),
+    ),
+    hints: (
+        "Read the gyro's z value (turning rate about the vertical axis, in rad/s) with axl_imu_gyro and print it while the Rover stands still. It is not zero.",
+        "Wait 1 s at the start, average the gyro z, and call it the bias. Then heading += (gyro_z - bias) * dt every step.",
+        "Steer with the heading error: left = base - k * heading, right = base + k * heading (heading in radians, positive to the left). Stop when the average wheel angle shows 1.5 m.",
+    ),
+)

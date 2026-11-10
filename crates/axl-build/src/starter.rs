@@ -136,6 +136,25 @@ pub fn rover_steps() -> Vec<Step> {
     ]
 }
 
+/// The Rover with a time-of-flight sensor next to the ultrasonic one (mission m05: the ultrasonic
+/// sensor cannot see a wall turned more than 40 degrees away, the time-of-flight sensor can up to
+/// 75 degrees).
+pub fn rover_tof_steps() -> Vec<Step> {
+    let mut steps = rover_steps();
+    steps.push(on_port(
+        named(
+            step("sensor_tof", "black", "", Aim::Down(TOF_X, TOF_Y)),
+            "tof",
+        ),
+        Port::E,
+    ));
+    steps
+}
+
+/// Where the time-of-flight sensor of [`rover_tof_steps`] is aimed at, mm.
+const TOF_X: f64 = -8.0;
+const TOF_Y: f64 = 0.0;
+
 /// The Test chassis recipe: a hub on a plate, no other devices.
 pub fn test_chassis_steps() -> Vec<Step> {
     vec![
@@ -175,6 +194,7 @@ pub fn run_steps(b: &mut Builder, steps: &[Step]) -> Result<(), BuildError> {
 pub fn build_starter(cat: &Catalog, id: &str) -> Result<Assembly, BuildError> {
     let (name, steps) = match id {
         "rover" => ("Rover", rover_steps()),
+        "rover_tof" => ("Rover with ToF", rover_tof_steps()),
         "test_chassis" => ("Test chassis", test_chassis_steps()),
         other => return Err(BuildError::UnknownPart(other.into())),
     };
@@ -185,4 +205,8 @@ pub fn build_starter(cat: &Catalog, id: &str) -> Result<Assembly, BuildError> {
 }
 
 /// Starter robot ids and the file stem each is stored under.
-pub const STARTERS: [(&str, &str); 2] = [("rover", "rover"), ("test_chassis", "test_chassis")];
+pub const STARTERS: [(&str, &str); 3] = [
+    ("rover", "rover"),
+    ("rover_tof", "rover_tof"),
+    ("test_chassis", "test_chassis"),
+];

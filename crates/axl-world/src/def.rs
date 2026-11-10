@@ -175,6 +175,9 @@ pub struct VariantDef {
     /// Added zones.
     #[serde(default)]
     pub zones: Vec<Zone>,
+    /// Replaces the guide line.
+    #[serde(default)]
+    pub path: Option<Vec<[f64; 2]>>,
 }
 
 /// A maze: cells and a layout per seed (see [`crate::maze`]).
@@ -218,6 +221,10 @@ pub struct WorldDef {
     /// Grading zones.
     #[serde(default)]
     pub zones: Vec<Zone>,
+    /// The guide line of a line-following world: a closed loop of points, metres. Missions grade
+    /// `FollowLine` against it; it is not drawn.
+    #[serde(default)]
+    pub path: Vec<[f64; 2]>,
     /// Variants.
     #[serde(default)]
     pub variants: Vec<VariantDef>,

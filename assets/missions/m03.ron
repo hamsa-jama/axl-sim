@@ -1,0 +1,38 @@
+(
+    version: 1,
+    id: "m03",
+    title: "Turn on the Spot",
+    chapter: 1,
+    concepts: ["Differential drive", "Wheel base"],
+    world: (id: "open_grid"),
+    robot: Starter("rover"),
+    time_limit_s: 12.0,
+    grading_seeds: [1, 2, 3],
+    battery_soc: (0.7, 1.0),
+    brief_md: r#"
+## Spin without wandering
+
+Turn the Rover **left by 90 degrees, then left by another 180 degrees** (270 degrees in all,
+counter-clockwise) and stop. When you are done the heading must be right to within 3 degrees, and the
+hub must not have drifted more than 20 mm from where it started.
+
+A robot turns on the spot when one wheel goes forwards and the other goes backwards by the same
+amount. How far must each wheel roll for a turn of 90 degrees? That depends on how far apart the
+wheels are.
+"#,
+    predict: Some((
+        question: "The left wheel turns forward once and the right wheel turns backward once. How many degrees does the Rover turn?",
+        unit: "degrees",
+        measured: "spin_one_turn_deg",
+    )),
+    criteria: [TurnTo(yaw: 4.71238898038469, tol_rad: 0.05235987755982989, drift_m: 0.02)],
+    stars: (
+        (text: "Heading within 1 degree", criteria: [TurnTo(yaw: 4.71238898038469, tol_rad: 0.017453292519943295, drift_m: 0.02)]),
+        (text: "Drift under 5 mm", criteria: [TurnTo(yaw: 4.71238898038469, tol_rad: 0.017453292519943295, drift_m: 0.005)]),
+    ),
+    hints: (
+        "Each wheel rolls along a circle of radius half the wheel base. For a turn of angle A (in radians) each wheel must roll (wheel base / 2) times A.",
+        "Measure the wheel base: spin the Rover once with the motors set to opposite angles and see how far it turned, or read the distance between the wheel centres in the builder (143.8 mm).",
+        "Left motor gets +a and right motor gets -a, where a = (wheel base / 2) * turn angle / wheel radius. Use axl_motor_position and wait until axl_motor_done is true before the next turn.",
+    ),
+)

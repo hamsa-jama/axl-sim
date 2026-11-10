@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod mission;
 pub mod plot;
 mod program;
 pub use program::{MAX_PLOT_CHANNELS, ProgramConfig, SimEvent, SimRobot};
@@ -210,6 +211,27 @@ pub enum Command {
     Stop,
 }
 
+/// A push on the robot at a simulated time: an impulse delivered over one tick (a mission event).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Push {
+    /// Simulated seconds.
+    pub t: f64,
+    /// Impulse, N s, world frame.
+    pub impulse_ns: [f64; 3],
+}
+
+/// What a mission adds to the simulation besides the world geometry: the printed mat the colour
+/// sensor reads and timed pushes.
+#[derive(Clone, Debug, Default)]
+pub struct Scenario {
+    /// The floor mat (the floor geom named `floor` carries it).
+    pub floor: Option<axl_hw::MatTexture>,
+    /// Pushes on the robot's root body.
+    pub pushes: Vec<Push>,
+    /// The mission ends at this simulated time: `axl_step` then returns `AXL_MISSION_OVER`.
+    pub limit_s: Option<f64>,
+}
+
 /// The stepping core: physics plus the hardware models. Shared by the thread and the headless run.
 pub struct SimCore {
     physics: Physics,
@@ -222,6 +244,8 @@ pub struct SimCore {
     contacts: Vec<ContactInfo>,
     device_names: Arc<Vec<String>>,
     channel_names: Arc<Vec<String>>,
+    pushes: Vec<Push>,
+    limit_s: Option<f64>,
 }
 
 impl SimCore {
@@ -257,11 +281,32 @@ impl SimCore {
             contacts: Vec::new(),
             device_names,
             channel_names: Arc::new(names),
+            pushes: Vec::new(),
+            limit_s: None,
         };
         for (m, v) in volts {
             core.set_volts(m, *v)?;
         }
         Ok(core)
+    }
+
+    /// Add a mission's mat and pushes. The mat stays through resets.
+    pub fn set_scenario(&mut self, scenario: &Scenario) {
+        let floor = match (&scenario.floor, self.physics.geom_id("floor")) {
+            (Some(texture), Ok(geom)) => Some(axl_hw::FloorMat {
+                geom,
+                texture: texture.clone(),
+            }),
+            _ => None,
+        };
+        self.hw.set_floor_mat(floor);
+        self.pushes = scenario.pushes.clone();
+        self.limit_s = scenario.limit_s;
+    }
+
+    /// The time at which the mission ends, if it has a limit.
+    pub fn limit_s(&self) -> Option<f64> {
+        self.limit_s
     }
 
     /// Give a motor a command.
@@ -321,10 +366,28 @@ impl SimCore {
     /// One 1 ms tick: hardware before, MuJoCo step, hardware after. Returns false when the
     /// simulation became unstable.
     pub fn tick(&mut self) -> bool {
+        if !self.pushes.is_empty() {
+            self.apply_pushes();
+        }
         self.hw.pre_step(&mut self.physics);
         self.physics.step();
         self.hw.post_step(&mut self.physics);
         !self.physics.warnings().is_unstable()
+    }
+
+    /// A push is a force of `impulse / 1 ms` on the root body's centre of mass during one tick.
+    fn apply_pushes(&mut self) {
+        let ms = (self.physics.time() * 1000.0).round() as u64;
+        for p in &self.pushes {
+            let start = (p.t * 1000.0).round() as u64;
+            if ms == start {
+                let com = self.physics.body_com(self.root);
+                let f = p.impulse_ns.map(|i| i / self.physics.timestep());
+                self.physics.apply_force(self.root, com, f);
+            } else if ms == start + 1 {
+                self.physics.clear_applied_forces();
+            }
+        }
     }
 
     /// Write the current state into `out` in place (no allocation after the first call).
@@ -436,7 +499,14 @@ pub struct Sandbox {
 impl Sandbox {
     /// Start the sim thread. The first snapshot is available once the thread has loaded the model.
     pub fn spawn(robot: &Compiled, volts: &[(String, f64)]) -> Result<Self, SimError> {
-        Self::start(robot, volts, HwOptions::default(), None, true)
+        Self::start(
+            robot,
+            volts,
+            HwOptions::default(),
+            None,
+            true,
+            &Scenario::default(),
+        )
     }
 
     /// Start the sim thread with a learner program. `paced` runs against the wall clock; unpaced
@@ -448,7 +518,27 @@ impl Sandbox {
         program: ProgramConfig,
         paced: bool,
     ) -> Result<Self, SimError> {
-        Self::start(robot, volts, opts, Some(program), paced)
+        Self::start(
+            robot,
+            volts,
+            opts,
+            Some(program),
+            paced,
+            &Scenario::default(),
+        )
+    }
+
+    /// Like [`Sandbox::spawn_program`], inside a mission's scenario (mat and pushes). `program`
+    /// may be `None`: the robot stands still and the world runs (the Simulate screen's sandbox).
+    pub fn spawn_scenario(
+        robot: &Compiled,
+        volts: &[(String, f64)],
+        opts: HwOptions,
+        program: Option<ProgramConfig>,
+        paced: bool,
+        scenario: &Scenario,
+    ) -> Result<Self, SimError> {
+        Self::start(robot, volts, opts, program, paced, scenario)
     }
 
     fn start(
@@ -457,19 +547,22 @@ impl Sandbox {
         opts: HwOptions,
         program: Option<ProgramConfig>,
         paced: bool,
+        scenario: &Scenario,
     ) -> Result<Self, SimError> {
         // Load on this thread first so the caller gets load errors, then let the thread build its
         // own copy (MuJoCo handles stay on the sim thread).
         SimCore::with_options(robot, volts, opts)?;
         let robot = robot.clone();
         let volts = volts.to_vec();
+        let scenario = scenario.clone();
         let (tx, rx) = unbounded();
         let (etx, events) = unbounded();
         let (input, output) = triple_buffer(&SimSnapshot::default());
         let thread = std::thread::Builder::new()
             .name("axl-sim".into())
             .spawn(move || {
-                if let Ok(core) = SimCore::with_options(&robot, &volts, opts) {
+                if let Ok(mut core) = SimCore::with_options(&robot, &volts, opts) {
+                    core.set_scenario(&scenario);
                     program::sim_thread(core, program, rx, input, etx, paced);
                 }
             })

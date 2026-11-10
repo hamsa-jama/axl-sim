@@ -13,11 +13,12 @@ axl-compile = { path = "../axl-compile" }
 axl-mujoco = { path = "../axl-mujoco" }
 axl-hw = { path = "../axl-hw" }
 axl-host = { path = "../axl-host" }
+axl-build = { path = "../axl-build" }
+axl-parts = { path = "../axl-parts" }
+axl-world = { path = "../axl-world" }
+axl-missions = { path = "../axl-missions" }
 crossbeam-channel = "0.5"
 triple_buffer = "9"
 thiserror = "2"
 
 [dev-dependencies]
-axl-build = { path = "../axl-build" }
-axl-parts = { path = "../axl-parts" }
-axl-world = { path = "../axl-world" }

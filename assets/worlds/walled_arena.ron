@@ -26,6 +26,8 @@
     ],
     variants: [
         (id: "straight"),
+        // m06: the Rover stands 0.2 m from the face of the first box, looking at it.
+        (id: "box_ahead", spawn: Some((x: 0.0, y: 0.45, yaw: 0.0))),
         (id: "angled", walls: Some([
             (from: (-0.75, -0.75), to: (0.75, -0.75), height: 0.1, thickness: 0.012, material: "painted_wood"),
             (from: (0.75, 0.75), to: (-0.75, 0.75), height: 0.1, thickness: 0.012, material: "painted_wood"),

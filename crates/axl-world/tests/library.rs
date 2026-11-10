@@ -166,3 +166,32 @@ fn the_ramp_lab_has_four_ramps_two_rubber_two_plastic() {
         assert!(w.variants.iter().any(|v| v.id == format!("ramp_{deg}")));
     }
 }
+
+#[test]
+fn the_line_track_guide_path_is_the_printed_line() {
+    let worlds = builtin_worlds().unwrap();
+    let objects = builtin_objects().unwrap();
+    for (variant, want_len) in [("a", 3.5..4.2), ("b", 3.5..4.6)] {
+        let b = build_world(&worlds["line_track"], Some(variant), 1, &objects, &fr()).unwrap();
+        let path = b.guide_path.expect("a guide path");
+        assert_eq!(path.first(), path.last(), "{variant} is a closed loop");
+        let len: f64 = path
+            .windows(2)
+            .map(|w| (w[0][0] - w[1][0]).hypot(w[0][1] - w[1][1]))
+            .sum();
+        assert!(want_len.contains(&len), "{variant}: length {len}");
+        // Every path point is on dark mat pixels.
+        let m = b.mat.unwrap();
+        for p in path.iter().step_by(7) {
+            let i = ((p[0] - m.min[0]) / 0.002) as usize;
+            let j = ((p[1] - m.min[1]) / 0.002) as usize;
+            assert!(m.pixels[j * m.width + i][0] < 0.1, "{variant}: {p:?}");
+        }
+    }
+    assert!(
+        build_world(&worlds["test_track"], None, 1, &objects, &fr())
+            .unwrap()
+            .guide_path
+            .is_none()
+    );
+}

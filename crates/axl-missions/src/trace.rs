@@ -44,6 +44,10 @@ pub struct RunTrace {
     pub program_error: Option<String>,
     /// The simulation became unstable.
     pub unstable: bool,
+    /// Electrical energy drawn from the battery, watt hours.
+    pub energy_wh: f64,
+    /// Times the robot ran into a wall or fixed obstacle (a new touch counts once).
+    pub collisions: u32,
 }
 
 impl RunTrace {

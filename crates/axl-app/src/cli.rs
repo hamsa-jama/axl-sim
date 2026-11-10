@@ -20,6 +20,15 @@ pub struct Args {
     #[arg(long, value_name = "PATH", requires = "headless")]
     pub controller: Option<PathBuf>,
 
+    /// Robot design (`.axlbot`) for a mission where the learner builds the robot (m12).
+    #[arg(long, value_name = "PATH", requires = "headless")]
+    pub robot: Option<PathBuf>,
+
+    /// In headless mode, grade over every grading seed of the mission (and award stars) instead
+    /// of only `--seed`.
+    #[arg(long, requires = "headless")]
+    pub all_seeds: bool,
+
     /// Seed for every source of randomness in a run.
     #[arg(long, value_name = "N", default_value_t = 1)]
     pub seed: u64,

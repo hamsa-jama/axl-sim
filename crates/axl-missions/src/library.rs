@@ -18,7 +18,15 @@ pub enum MissionError {
     Unknown(String),
 }
 
-const FILES: &[(&str, &str)] = &[];
+macro_rules! missions {
+    ($($id:literal),* $(,)?) => {
+        &[$(($id, include_str!(concat!("../../../assets/missions/", $id, ".ron")))),*]
+    };
+}
+
+const FILES: &[(&str, &str)] = missions!(
+    "m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11", "m12"
+);
 
 /// All missions, in curriculum order.
 pub fn builtin_missions() -> Result<Vec<MissionDef>, MissionError> {

@@ -53,6 +53,11 @@ pub struct BuiltWorld {
     pub object_bodies: Vec<String>,
     /// Wall geom names, so missions can tag contacts.
     pub wall_geoms: Vec<String>,
+    /// Names of the fixed obstacles (static shapes whose name starts with `obstacle`), which also
+    /// count as walls for contact tagging.
+    pub obstacle_geoms: Vec<String>,
+    /// The guide line (closed loop) of a line-following world, for `FollowLine`.
+    pub guide_path: Option<Vec<[f64; 2]>>,
 }
 
 fn rgba(c: [u8; 3]) -> String {
@@ -338,6 +343,15 @@ pub fn build_world(
             .unwrap_or(&m.shapes);
         raster(m, shapes)
     });
+    let guide_path = var
+        .and_then(|v| v.path.clone())
+        .or_else(|| (!def.path.is_empty()).then(|| def.path.clone()));
+    let obstacle_geoms = def
+        .statics
+        .iter()
+        .filter(|s| s.name.starts_with("obstacle"))
+        .map(|s| s.name.clone())
+        .collect();
     Ok(BuiltWorld {
         worldbody,
         spawn,
@@ -345,5 +359,7 @@ pub fn build_world(
         mat,
         object_bodies,
         wall_geoms,
+        obstacle_geoms,
+        guide_path,
     })
 }
