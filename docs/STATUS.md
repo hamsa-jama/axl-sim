@@ -18,7 +18,14 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M8 Instruments is accepted and merged into `main` (merge commit 1910466, recorded in a later docs commit). Branch `milestone/m09` has two slices of M9: `axl-world` (worlds and objects) and `axl-missions` (commit `feat(missions): ...`: `def`, `trace`, `eval`, `progress`, `library` with an empty file list); everything is pushed and the tree is clean. Next, in order: (1) add a guide-line `path` to `line_track` for `FollowLine`, (2) write the 12 mission files in `assets/missions/` (register them in `library.rs` `FILES`; note RON fixed-size arrays are tuples: `stars: (a, b)`, `hints: ("a", "b", "c")`) and a headless runner in `axl-sim` that records a trace at fixed simulated times and can run a built `.wasm` unpaced over the grading seeds, (3) reference solutions in `templates/c/mNN/` (really built with wasi-sdk) and `templates/rust/mNN/` (cargo check on the host here, built in CI) that must pass their mission's grading, (4) the results screen. Open owner checks: O16 to O18.
+M8 Instruments is accepted and merged into `main` (merge commit 1910466). M9 is in progress on branch `milestone/m09`, all pushed. What the branch has, from the commits:
+
+- `c5377e0` `axl-world`: six worlds, seven objects, maze layouts, mat raster, MJCF building.
+- `6990eb4` `axl-missions`: definitions, trace, 17 criterion evaluators, grading and stars, `progress.ron` (unit tests on synthetic traces).
+- `e369e1e` `axl-sim::mission` (world and robot setup, 10 ms trace `Recorder`, unpaced graded run over the seeds, measured numbers such as `sensor_range_m`), `axl --headless --mission mNN --controller robot.wasm --seed N [--all-seeds]` printing JSON, the guide line for `line_track`, all 12 files in `assets/missions/` registered in `library.rs`, `rover_tof` starter, C solution of m01.
+- `c5e3520` snapshot of unfinished work after a container restart: hub moved one stud back on the Rover (`rover.axlbot`, `starter.rs`), pivot-point trace sample for `TurnTo`, stronger m10 pushes applied 50 mm ahead of the centre of mass, gentler measuring drives, `crates/axl-sim/tests/front.rs` (contains debug tests), and first C solutions for m01 to m08 (never built or graded).
+
+Still to do, in order: (1) build and grade the C solutions m01 to m12 and write m09 to m12; (2) Rust solutions and the m12 `.axlbot`; (3) `cargo xtask sdk-check`; (4) Results screen, predict, hints, FSRS warm-ups and progress saving in the app; (5) decision 0015 and `docs/architecture.md`; (6) acceptance and merge. Open owner checks: O16 to O18.
 
 ## Owner checks
 
