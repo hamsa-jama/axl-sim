@@ -36,7 +36,12 @@ enum Command {
         require_rust: bool,
     },
     /// Build the release package for this OS (M10).
-    Package,
+    Package {
+        /// Pass `--ignore-rust-version` to the release build (same as AXL_IGNORE_RUST_VERSION=1),
+        /// for a machine whose Rust is slightly older than the pinned toolchain.
+        #[arg(long)]
+        ignore_rust_version: bool,
+    },
     /// Write assets/parts/*.ron from the generator in axl-parts.
     GenParts,
     /// Prefilter the HDRI into KTX2 cubemaps, only if M2 needs it.
@@ -71,7 +76,9 @@ fn main() -> Result<()> {
                 require_rust,
             },
         ),
-        Command::Package => package::run_package(&workspace_root()),
+        Command::Package {
+            ignore_rust_version,
+        } => package::run_package(&workspace_root(), ignore_rust_version),
         Command::GenParts => {
             let n = axl_parts::catalog::write_builtin(&workspace_root().join("assets/parts"))?;
             println!("wrote {n} part files to assets/parts");

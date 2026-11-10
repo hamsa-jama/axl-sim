@@ -7,7 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// The 17 default weights of FSRS-4.5.
+/// The 17 default weights of FSRS-4.5 (the published ones; the owner confirmed them, with a
+/// target retention of 0.9, in decision 0016).
 pub const W: [f64; 17] = [
     0.4872, 1.4003, 3.7145, 13.8206, 5.1618, 1.2298, 0.8975, 0.031, 1.6474, 0.1367, 1.0461, 2.1072,
     0.0793, 0.3246, 1.587, 0.2272, 2.8755,
@@ -121,6 +122,19 @@ impl Card {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_parameters_are_the_published_fsrs_4_5_defaults_with_ninety_percent_retention() {
+        // Confirmed by the owner (decision 0016): FSRS-4.5, default weights, target retention 0.9.
+        assert_eq!(
+            W,
+            [
+                0.4872, 1.4003, 3.7145, 13.8206, 5.1618, 1.2298, 0.8975, 0.031, 1.6474, 0.1367,
+                1.0461, 2.1072, 0.0793, 0.3246, 1.587, 0.2272, 2.8755
+            ]
+        );
+        assert_eq!(WANTED_RETENTION, 0.9);
+    }
 
     #[test]
     fn recall_is_ninety_percent_after_one_stability() {

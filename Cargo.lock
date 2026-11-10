@@ -439,7 +439,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "axl-app"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "axl-build",
@@ -468,7 +468,7 @@ dependencies = [
 
 [[package]]
 name = "axl-build"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axl-parts",
  "directories",
@@ -480,7 +480,7 @@ dependencies = [
 
 [[package]]
 name = "axl-code"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axl-host",
  "crossbeam-channel",
@@ -489,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "axl-compile"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axl-build",
  "axl-mujoco",
@@ -503,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "axl-host"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axl-hw",
  "crossbeam-channel",
@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "axl-hw"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "approx",
  "axl-build",
@@ -531,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "axl-missions"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axl-world",
  "ron",
@@ -541,7 +541,7 @@ dependencies = [
 
 [[package]]
 name = "axl-mujoco"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "approx",
  "mujoco-rs",
@@ -550,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "axl-parts"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "ron",
  "serde",
@@ -559,7 +559,7 @@ dependencies = [
 
 [[package]]
 name = "axl-render"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axl-build",
  "axl-compile",
@@ -573,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "axl-sim"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axl-build",
  "axl-compile",
@@ -590,7 +590,7 @@ dependencies = [
 
 [[package]]
 name = "axl-validate"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axl-build",
  "axl-compile",
@@ -603,7 +603,7 @@ dependencies = [
 
 [[package]]
 name = "axl-world"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "ron",
  "serde",
@@ -6623,7 +6623,7 @@ checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "axl-parts",

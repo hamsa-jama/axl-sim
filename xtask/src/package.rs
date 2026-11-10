@@ -63,29 +63,51 @@ fn run(cmd: &mut Command, what: &str) -> Result<()> {
     Ok(())
 }
 
+/// Is the environment variable set to something other than empty, `0` or `false`?
+fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .map(|v| !matches!(v.trim(), "" | "0" | "false"))
+        .unwrap_or(false)
+}
+
+/// The arguments of the release build. `cargo rustc` hands the linker flag to the final crate
+/// only, so the dependencies are not rebuilt for it. The binary finds its MuJoCo library next to
+/// itself (Linux: rpath `$ORIGIN`; macOS: `@executable_path`; Windows needs none).
+///
+/// `ignore_rust_version` passes `--ignore-rust-version`: a machine whose Rust is a patch release
+/// older than the pinned one (the development sandbox has 1.97.0, the pin is 1.97.1) can still
+/// build. The pinned toolchain stays the default everywhere else.
+fn build_args(os: &str, ignore_rust_version: bool) -> Vec<String> {
+    let mut a: Vec<String> = ["rustc", "--release", "--package", "axl-app", "--bin", "axl"]
+        .map(String::from)
+        .into();
+    if ignore_rust_version {
+        a.push("--ignore-rust-version".into());
+    }
+    match os {
+        "linux" => a.extend(["--".into(), "-Clink-arg=-Wl,-rpath,$ORIGIN".into()]),
+        "macos" => a.extend(["--".into(), "-Clink-arg=-Wl,-rpath,@executable_path".into()]),
+        _ => {}
+    }
+    a
+}
+
 /// Build and pack.
-pub fn run_package(root: &Path) -> Result<()> {
+pub fn run_package(root: &Path, ignore_rust_version: bool) -> Result<()> {
     let os = host_os()?;
     let ver = version(root)?;
     let env = mujoco_env(root)?;
 
-    // The binary finds its MuJoCo library next to itself.
-    let rpath = match os {
-        "linux" => "-C link-arg=-Wl,-rpath,$ORIGIN",
-        "macos" => "-C link-arg=-Wl,-rpath,@executable_path",
-        _ => "",
-    };
+    let args = build_args(
+        os,
+        ignore_rust_version || env_flag("AXL_IGNORE_RUST_VERSION"),
+    );
     let mut build = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
-    build
-        .current_dir(root)
-        .args(["build", "--release", "--package", "axl-app"]);
+    build.current_dir(root).args(&args);
     for (k, v) in &env {
         build.env(k, v);
     }
-    if !rpath.is_empty() {
-        build.env("RUSTFLAGS", rpath);
-    }
-    run(&mut build, "cargo build --release")?;
+    run(&mut build, "cargo rustc --release")?;
 
     let out = root.join("target/package");
     let name = format!("AXL-{ver}-{os}");
@@ -202,6 +224,30 @@ pub fn run_package(root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_build_passes_the_rpath_to_the_final_crate_only() {
+        let a = build_args("linux", false);
+        let dashes = a.iter().position(|x| x == "--").unwrap();
+        assert_eq!(a[dashes + 1], "-Clink-arg=-Wl,-rpath,$ORIGIN");
+        assert!(a[..dashes].contains(&"rustc".to_owned()));
+        assert!(!a.contains(&"--ignore-rust-version".to_owned()));
+        assert!(build_args("windows", false).iter().all(|x| x != "--"));
+        assert!(
+            build_args("macos", false)
+                .last()
+                .unwrap()
+                .contains("@executable_path")
+        );
+    }
+
+    #[test]
+    fn ignoring_the_rust_version_is_opt_in_and_comes_before_the_linker_flags() {
+        let a = build_args("linux", true);
+        let flag = a.iter().position(|x| x == "--ignore-rust-version").unwrap();
+        let dashes = a.iter().position(|x| x == "--").unwrap();
+        assert!(flag < dashes);
+    }
 
     #[test]
     fn the_version_comes_from_the_workspace_package() {
