@@ -91,13 +91,22 @@ impl Card {
     pub fn review(&self, g: Grade, day: f64) -> Self {
         let r = self.recall(day);
         let (s, d) = (self.stability, self.difficulty);
-        let new_d = clamp_d(W[7] * init_difficulty(Grade::Easy) + (1.0 - W[7]) * (d - W[6] * (f64::from(g as u8) - 3.0)));
+        let new_d = clamp_d(
+            W[7] * init_difficulty(Grade::Easy)
+                + (1.0 - W[7]) * (d - W[6] * (f64::from(g as u8) - 3.0)),
+        );
         let new_s = if g == Grade::Again {
             W[11] * d.powf(-W[12]) * ((s + 1.0).powf(W[13]) - 1.0) * (W[14] * (1.0 - r)).exp()
         } else {
             let hard = if g == Grade::Hard { W[15] } else { 1.0 };
             let easy = if g == Grade::Easy { W[16] } else { 1.0 };
-            s * (W[8].exp() * (11.0 - d) * s.powf(-W[9]) * (((1.0 - r) * W[10]).exp() - 1.0) * hard * easy + 1.0)
+            s * (W[8].exp()
+                * (11.0 - d)
+                * s.powf(-W[9])
+                * (((1.0 - r) * W[10]).exp() - 1.0)
+                * hard
+                * easy
+                + 1.0)
         };
         Self {
             stability: new_s.max(0.01),
@@ -128,16 +137,26 @@ mod tests {
         assert!((c.difficulty - 5.1618).abs() < 1e-12);
         assert!((Card::first(Grade::Again, 0.0).stability - 0.4872).abs() < 1e-12);
         assert!((Card::first(Grade::Easy, 0.0).stability - 13.8206).abs() < 1e-12);
-        assert!(Card::first(Grade::Easy, 0.0).difficulty < Card::first(Grade::Again, 0.0).difficulty);
+        assert!(
+            Card::first(Grade::Easy, 0.0).difficulty < Card::first(Grade::Again, 0.0).difficulty
+        );
     }
 
     #[test]
     fn a_good_review_at_the_due_day_grows_stability_and_a_lapse_shrinks_it() {
         let c = Card::first(Grade::Good, 0.0);
         let due = c.due_day();
-        assert!((due - 3.7145).abs() < 1e-9, "due when R = 0.9, i.e. after S days: {due}");
+        assert!(
+            (due - 3.7145).abs() < 1e-9,
+            "due when R = 0.9, i.e. after S days: {due}"
+        );
         let good = c.review(Grade::Good, due);
-        assert!(good.stability > c.stability * 1.5, "{} vs {}", good.stability, c.stability);
+        assert!(
+            good.stability > c.stability * 1.5,
+            "{} vs {}",
+            good.stability,
+            c.stability
+        );
         let easy = c.review(Grade::Easy, due);
         let hard = c.review(Grade::Hard, due);
         assert!(easy.stability > good.stability && good.stability > hard.stability);

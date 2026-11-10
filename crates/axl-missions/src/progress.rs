@@ -276,7 +276,11 @@ mod tests {
         std::fs::write(&f, "(version: 99, missions: {})").unwrap();
         assert_eq!(Progress::load(&f), Progress::default());
         // Old files without a version or cards still load.
-        std::fs::write(&f, "(missions: {\"m01\": (stars: 3, attempts: 2, hint_used: false, hints_open: 0)})").unwrap();
+        std::fs::write(
+            &f,
+            "(missions: {\"m01\": (stars: 3, attempts: 2, hint_used: false, hints_open: 0)})",
+        )
+        .unwrap();
         assert_eq!(Progress::load(&f).stars("m01"), 3);
         let _ = std::fs::remove_file(&f);
         let _ = std::fs::remove_file(&bak);

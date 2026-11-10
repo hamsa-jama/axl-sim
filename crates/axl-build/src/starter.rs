@@ -1,4 +1,4 @@
-//! The two starter robots, built through the same commands the UI issues.
+//! The starter robots and the m12 reference design, built through the same commands the UI issues.
 //!
 //! Each step names a part, how the user turns it, and where the cursor points. Positions are never
 //! written down: the snapping code finds them, exactly as it does when a learner builds the robot.
@@ -99,7 +99,12 @@ pub fn rover_steps() -> Vec<Step> {
         named(step("hub", "white", "", Aim::Down(HUB_X, 0.0)), "hub"),
         on_port(
             named(
-                step("sensor_ultrasonic", "black", "", Aim::Down(24.0 + HUB_X, 0.0)),
+                step(
+                    "sensor_ultrasonic",
+                    "black",
+                    "",
+                    Aim::Down(24.0 + HUB_X, 0.0),
+                ),
                 "eye",
             ),
             Port::C,
@@ -136,7 +141,12 @@ pub fn rover_steps() -> Vec<Step> {
         // Caster stack at the back: two 2x2 bricks lift the ball to the wheels' floor line.
         below(step("brick_2x2", "red", "", Aim::Down(CASTER_X, 0.0))),
         below(step("brick_2x2", "red", "", Aim::Down(CASTER_X, 0.0))),
-        below(step("caster_ball", "dark_grey", "", Aim::Down(CASTER_X, 0.0))),
+        below(step(
+            "caster_ball",
+            "dark_grey",
+            "",
+            Aim::Down(CASTER_X, 0.0),
+        )),
         on_port(
             named(
                 below(step("sensor_color", "white", "", Aim::Down(24.0, 0.0))),
@@ -221,3 +231,54 @@ pub const STARTERS: [(&str, &str); 3] = [
     ("rover_tof", "rover_tof"),
     ("test_chassis", "test_chassis"),
 ];
+
+/// Move the cursor of a step `dx` mm along X.
+fn shifted(mut s: Step, dx: f64) -> Step {
+    s.aim = match s.aim {
+        Aim::Down(x, y) => Aim::Down(x + dx, y),
+        Aim::FromPosY(x, z) => Aim::FromPosY(x + dx, z),
+        Aim::FromNegY(x, z) => Aim::FromNegY(x + dx, z),
+    };
+    s
+}
+
+/// The reference design for mission m12 (a 25 degree ramp): the Rover without the colour sensor
+/// that hangs under its nose. The motors and wheels sit 24 mm farther forward on the plate (the
+/// plate overhangs them by 36 mm instead of 60 mm, so its nose clears the foot of the ramp), the
+/// hub and the ultrasonic sensor 34 mm farther forward (the centre of mass moves over the axle, so
+/// the wheels keep their grip when the ramp shifts the weight backwards) and the caster stack
+/// 8 mm forward (60 mm behind the axle). It is placed first: the underside aim cannot reach the
+/// back of the plate once the hub is on it.
+pub fn climber_steps() -> Vec<Step> {
+    let mut steps: Vec<Step> = rover_steps()
+        .into_iter()
+        .filter(|s| s.name != Some("color"))
+        .map(|s| match s.part {
+            "hub" | "sensor_ultrasonic" => shifted(s, HUB_SHIFT),
+            "motor_medium" | "axle_3" | "wheel_56" => shifted(s, AXLE_SHIFT),
+            "brick_2x2" | "caster_ball" => shifted(s, CASTER_SHIFT),
+            _ => s,
+        })
+        .collect();
+    // The caster stack goes on first: with the hub already in place the cursor ray for the
+    // underside lands on the hub, and the stack cannot be placed far behind it.
+    let at = steps
+        .iter()
+        .position(|s| s.part == "brick_2x2")
+        .unwrap_or(1);
+    let caster: Vec<Step> = steps.drain(at..at + 3).collect();
+    steps.splice(1..1, caster);
+    steps
+}
+
+const HUB_SHIFT: f64 = 40.0;
+const AXLE_SHIFT: f64 = 24.0;
+const CASTER_SHIFT: f64 = 8.0;
+
+/// Build the reference design for mission m12 (`climber`).
+pub fn build_climber(cat: &Catalog) -> Result<Assembly, BuildError> {
+    let mut b = Builder::new(cat.clone());
+    b.assembly.name = "Climber".into();
+    run_steps(&mut b, &climber_steps())?;
+    Ok(b.assembly.clone())
+}

@@ -7,3 +7,4 @@ MUJOCO_LOG.TXT
 
 # Output of --perf-seconds runs
 perf.json
+*.axlbot.bak

@@ -21,15 +21,53 @@ fn front_of_the_rover() {
 
 #[test]
 fn dbg_trace() {
-    let Ok(path) = std::env::var("DBG_WASM") else { return };
+    let Ok(path) = std::env::var("DBG_WASM") else {
+        return;
+    };
     let id = std::env::var("DBG_MISSION").unwrap();
     let m = mission(&id).unwrap();
     let cat = Catalog::builtin();
-    let asm = axl_sim::mission::robot_assembly(&m, &cat, None).unwrap();
+    let asm = axl_sim::mission::robot_assembly(
+        &m,
+        &cat,
+        std::env::var("DBG_ROBOT")
+            .ok()
+            .as_deref()
+            .map(std::path::Path::new),
+    )
+    .unwrap();
     let wasm = std::fs::read(path).unwrap();
-    let (run, _) = axl_sim::mission::run_seed(&m, &asm, &cat, std::env::var("DBG_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or(1), Some(&wasm), &Default::default()).unwrap();
-    for s in run.trace.samples.iter().step_by(std::env::var("DBG_STEP").ok().and_then(|s| s.parse().ok()).unwrap_or(50)) {
-        eprintln!("t {:.2} x {:.4} y {:.4} yaw {:.3} v {:.3} front {:.3} tilt {:.2} z {:.3} px {:.4} py {:.4}", s.t, s.pos[0], s.pos[1], s.yaw, s.speed, s.front[0], s.tilt, s.pos[2], s.pivot[0], s.pivot[1]);
+    let (run, _) = axl_sim::mission::run_seed(
+        &m,
+        &asm,
+        &cat,
+        std::env::var("DBG_SEED")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1),
+        Some(&wasm),
+        &Default::default(),
+    )
+    .unwrap();
+    for s in run.trace.samples.iter().step_by(
+        std::env::var("DBG_STEP")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(50),
+    ) {
+        eprintln!(
+            "t {:.2} x {:.4} y {:.4} yaw {:.3} v {:.3} front {:.3} tilt {:.2} z {:.3} px {:.4} py {:.4}",
+            s.t,
+            s.pos[0],
+            s.pos[1],
+            s.yaw,
+            s.speed,
+            s.front[0],
+            s.tilt,
+            s.pos[2],
+            s.pivot[0],
+            s.pivot[1]
+        );
     }
 }
 
@@ -48,7 +86,11 @@ fn dbg_com() {
         eprintln!("{id}: com {com:?} mass {mass}");
         for i in 0..core.physics().body_count() {
             let p = core.physics().body_pose(axl_mujoco::BodyId(i));
-            eprintln!("body {i} {:?} mass {}", p.pos, core.physics().body_mass(axl_mujoco::BodyId(i)));
+            eprintln!(
+                "body {i} {:?} mass {}",
+                p.pos,
+                core.physics().body_mass(axl_mujoco::BodyId(i))
+            );
         }
     }
 }
@@ -74,10 +116,55 @@ fn dbg_ramp_contacts() {
                 if c.normal_force.abs() > 1e-6 {
                     eprintln!(
                         "  rel ({:.3},{:.3},{:.3}) n ({:.2},{:.2},{:.2}) f {:.2} g {:?}/{:?}",
-                        c.pos[0] - root[0], c.pos[1] - root[1], c.pos[2], c.normal[0], c.normal[1], c.normal[2], c.normal_force, c.geom1, c.geom2
+                        c.pos[0] - root[0],
+                        c.pos[1] - root[1],
+                        c.pos[2],
+                        c.normal[0],
+                        c.normal[1],
+                        c.normal[2],
+                        c.normal_force,
+                        c.geom1,
+                        c.geom2
                     );
                 }
             }
         }
     }
+}
+
+#[test]
+fn dbg_com2() {
+    let Ok(path) = std::env::var("DBG_ROBOT") else {
+        return;
+    };
+    let m = mission("m12").unwrap();
+    let cat = Catalog::builtin();
+    let asm =
+        axl_sim::mission::robot_assembly(&m, &cat, Some(std::path::Path::new(&path))).unwrap();
+    let s = setup(&m, 1, &asm, &cat).unwrap();
+    let mut core = s.core().unwrap();
+    for _ in 0..200 {
+        core.tick();
+    }
+    let root = core.root_body();
+    let com = core.physics().subtree_com(root);
+    let mass = core.physics().subtree_mass(root);
+    let mut wheel = [0.0; 3];
+    for j in &s.pivot_joints {
+        if let Ok(jid) = core.physics().joint_id(j) {
+            if let Some(b) = core.physics().joint_body(jid) {
+                let p = core.physics().body_pose(b).pos;
+                wheel = p;
+                eprintln!("motor body {j} {:?}", p);
+            }
+        }
+    }
+    eprintln!(
+        "COM {:?} mass {} axle {:?} com-axle x {:.1} mm height {:.1} mm",
+        com,
+        mass,
+        wheel,
+        (com[0] - wheel[0]) * 1000.0,
+        com[2] * 1000.0
+    );
 }
