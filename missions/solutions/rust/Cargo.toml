@@ -1,0 +1,8 @@
+# The reference solutions in Rust, one crate per mission. Used by CI and `cargo xtask sdk-check`;
+# never shipped in a package. Built for wasm32-wasip1 (the host target only gets `cargo check`).
+[workspace]
+resolver = "3"
+members = ["m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11", "m12"]
+
+[profile.release]
+debug = "line-tables-only"
