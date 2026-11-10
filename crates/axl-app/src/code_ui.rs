@@ -35,6 +35,8 @@ pub struct CodeScreen {
     goto: Option<u32>,
     notice: String,
     target_install: Option<crossbeam_channel::Receiver<String>>,
+    submit_after_build: bool,
+    submission: Option<Vec<u8>>,
 }
 
 /// Find the folder that holds `templates/` and `sdk/`: `AXL_ROOT`, else the working directory
@@ -87,6 +89,8 @@ impl CodeScreen {
             goto: None,
             notice: String::new(),
             target_install: None,
+            submit_after_build: false,
+            submission: None,
         };
         if run {
             s.build(true);
@@ -109,6 +113,23 @@ impl CodeScreen {
         self.program_log.clear();
         self.stop_at = None;
         self.session.start_build();
+    }
+
+    /// Build the program and hand it over for grading (see [`CodeScreen::take_submission`]).
+    pub fn request_submit(&mut self) {
+        self.build(false);
+        self.submit_after_build = true;
+        self.submission = None;
+    }
+
+    /// Is a build for grading under way?
+    pub fn submit_pending(&self) -> bool {
+        self.submit_after_build
+    }
+
+    /// The built program, once after a successful [`CodeScreen::request_submit`].
+    pub fn take_submission(&mut self) -> Option<Vec<u8>> {
+        self.submission.take()
     }
 
     fn reload(&mut self) {
@@ -221,7 +242,16 @@ pub fn code_tick(
             s.session.log.push(l);
         }
     }
-    if let Some(o) = s.session.pump()
+    let built = s.session.pump();
+    if let Some(o) = &built
+        && s.submit_after_build
+    {
+        s.submit_after_build = false;
+        match (o.success, o.wasm.as_ref().map(std::fs::read)) {
+            (true, Some(Ok(bytes))) => s.submission = Some(bytes),
+            _ => s.notice = "Fix the build errors, then check your solution again.".into(),
+        }
+    } else if let Some(o) = built
         && o.success
         && s.run_after_build
         && let (Some(r), Some(w)) = (robot.as_ref(), o.wasm.as_ref())

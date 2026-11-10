@@ -127,8 +127,9 @@ pub fn run(args: &Args) -> AppExit {
             _ => axl_host::toolchain::Lang::C,
         };
         let screen = crate::code_ui::CodeScreen::open(m, lang, args.code_run)?;
+        let mission = crate::mission_ui::MissionScreen::open(m)?;
         let (scene, sim, robot) = crate::sandbox::start_code()?;
-        Ok::<_, String>((screen, scene, sim, robot))
+        Ok::<_, String>((screen, scene, sim, robot, mission))
     }) {
         Some(Ok(v)) => Some(v),
         Some(Err(e)) => {
@@ -288,12 +289,13 @@ pub fn run(args: &Args) -> AppExit {
                 .after(status_bar),
         );
     }
-    if let Some((screen, scene, sim, robot)) = code {
+    if let Some((screen, scene, sim, robot, mission)) = code {
         app.init_resource::<axl_render::camera_rig::ViewInsets>();
         app.insert_resource(screen)
             .insert_resource(scene)
             .insert_resource(sim)
-            .insert_resource(robot);
+            .insert_resource(robot)
+            .insert_resource(mission);
         crate::sim_ui::install(&mut app, script, &switch_on, true);
         app.add_systems(
             Update,
@@ -306,6 +308,14 @@ pub fn run(args: &Args) -> AppExit {
             crate::code_ui::code_panels
                 .after(control_bar)
                 .after(status_bar),
+        );
+        app.add_systems(
+            Update,
+            crate::mission_ui::mission_tick.after(crate::code_ui::code_tick),
+        );
+        app.add_systems(
+            EguiPrimaryContextPass,
+            crate::mission_ui::mission_panel.after(crate::code_ui::code_panels),
         );
         app.add_systems(
             EguiPrimaryContextPass,

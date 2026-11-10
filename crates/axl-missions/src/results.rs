@@ -2,6 +2,7 @@
 //! the real answer to the prediction question, and the brief as headings and paragraphs. The screen
 //! itself (egui) only draws these.
 
+use crate::def::{Criterion, Expected};
 use crate::eval::Grade;
 use crate::trace::RunTrace;
 
@@ -104,6 +105,120 @@ pub fn prediction_verdict(predicted: f64, actual: f64, unit: &str) -> String {
         "A surprise, and surprises teach the most."
     };
     format!("You predicted {predicted:.3} {unit}; the simulation shows {actual:.3} {unit}. {how}")
+}
+
+fn mm(m: f64) -> String {
+    format!("{:.0} mm", m * 1000.0)
+}
+
+fn deg(r: f64) -> String {
+    format!("{:.0} degrees", r.to_degrees())
+}
+
+/// A criterion in words a learner can read before the run.
+pub fn describe(c: &Criterion) -> String {
+    match c {
+        Criterion::ReachZone { zone, within_s } | Criterion::FinishWithin { zone, within_s } => {
+            format!("Get the robot into the zone \"{zone}\" within {within_s} s.")
+        }
+        Criterion::FinalPose {
+            x,
+            y,
+            yaw,
+            pos_tol_m,
+            yaw_tol_rad,
+        } => format!(
+            "End at x = {x} m, y = {y} m, facing {} (within {} and {}).",
+            deg(*yaw),
+            mm(*pos_tol_m),
+            deg(*yaw_tol_rad)
+        ),
+        Criterion::FinalX { x, tol_m, within_s } => format!(
+            "Stop with the hub at x = {x:.3} m, within {}{}.",
+            mm(*tol_m),
+            within_s.map_or(String::new(), |s| format!(", in {s} s"))
+        ),
+        Criterion::FrontStop {
+            min_x,
+            max_x,
+            within_s,
+        } => format!(
+            "Stop with the front of the robot between x = {min_x} m and {max_x} m within {within_s} s."
+        ),
+        Criterion::TurnTo {
+            yaw,
+            tol_rad,
+            drift_m,
+        } => format!(
+            "Turn {} in total (within {}), without drifting more than {}.",
+            deg(*yaw),
+            deg(*tol_rad),
+            mm(*drift_m)
+        ),
+        Criterion::Waypoints {
+            points,
+            tol_m,
+            end_tol_m,
+        } => format!(
+            "Pass within {} of {} corners in order, then end within {} of the start.",
+            mm(*tol_m),
+            points.len(),
+            mm(*end_tol_m)
+        ),
+        Criterion::NoContact { tag } => format!("Never touch the {tag}."),
+        Criterion::FrontClearance {
+            min_m,
+            max_m,
+            within_s,
+        } => format!(
+            "Stop {} to {} from what is ahead, within {within_s} s.",
+            mm(*min_m),
+            mm(*max_m)
+        ),
+        Criterion::FollowLine {
+            max_dev_m,
+            laps,
+            within_s,
+        } => format!(
+            "Follow the line for {laps} lap(s) in {within_s} s, never more than {} from it.",
+            mm(*max_dev_m)
+        ),
+        Criterion::MeanSpeed {
+            from_s,
+            to_s,
+            target_ms,
+            tol_ms,
+        } => format!(
+            "Drive at {target_ms} m/s (+- {tol_ms}) on average from {from_s} s to {to_s} s."
+        ),
+        Criterion::Report {
+            key, expected, tol, ..
+        } => match expected {
+            Expected::Value(v) => format!("Report \"{key}\" = {v} (+- {tol}) with axl_report."),
+            Expected::Measured(_) => format!(
+                "Report \"{key}\" with axl_report; the simulator checks it against its own measurement (+- {tol})."
+            ),
+        },
+        Criterion::NoTip { max_tilt_rad } => {
+            format!("Never tilt more than {}.", deg(*max_tilt_rad))
+        }
+        Criterion::HeadingLock {
+            distance_m,
+            max_lateral_m,
+            max_yaw_rad,
+        } => format!(
+            "Drive straight for {distance_m} m: at most {} to the side and {} off in heading.",
+            mm(*max_lateral_m),
+            deg(*max_yaw_rad)
+        ),
+        Criterion::BelievedPose { tol_m } => format!(
+            "Keep track of your position with axl_mark_pose; it must end within {} of the truth.",
+            mm(*tol_m)
+        ),
+        Criterion::EndNearStart { tol_m } => format!("End within {} of the start.", mm(*tol_m)),
+        Criterion::UsedPlot => "Send something to the plotter with axl_plot.".to_owned(),
+        Criterion::MaxParts { n } => format!("Use at most {n} parts."),
+    }
 }
 
 /// A piece of a brief.
@@ -231,6 +346,19 @@ mod tests {
         assert!(prediction_verdict(100.0, 120.0, "mm").contains("Not far off"));
         assert!(prediction_verdict(10.0, 120.0, "mm").contains("surprise"));
         assert!(prediction_verdict(1.0, 2.0, "mm").contains("1.000 mm"));
+    }
+
+    #[test]
+    fn every_criterion_of_every_mission_can_be_described() {
+        for m in crate::library::builtin_missions().unwrap() {
+            for c in m
+                .criteria
+                .iter()
+                .chain(m.stars.iter().flat_map(|s| &s.criteria))
+            {
+                assert!(describe(c).len() > 10, "{} {c:?}", m.id);
+            }
+        }
     }
 
     #[test]
