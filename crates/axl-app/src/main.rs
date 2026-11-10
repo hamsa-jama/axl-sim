@@ -14,9 +14,11 @@ mod gui;
 mod headless;
 #[cfg(feature = "gui")]
 mod mission_ui;
+#[cfg(feature = "gui")]
 mod nav;
 #[cfg(feature = "gui")]
 mod sandbox;
+#[cfg(feature = "gui")]
 mod screens;
 #[cfg(feature = "gui")]
 mod sim_ui;
