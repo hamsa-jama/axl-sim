@@ -530,6 +530,12 @@ dependencies = [
 [[package]]
 name = "axl-missions"
 version = "0.1.0"
+dependencies = [
+ "axl-world",
+ "ron",
+ "serde",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "axl-mujoco"
