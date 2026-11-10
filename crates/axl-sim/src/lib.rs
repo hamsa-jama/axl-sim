@@ -85,6 +85,8 @@ pub struct ContactView {
     pub normal_force: f64,
     /// Friction forces along the two tangents, newtons.
     pub friction: [f64; 2],
+    /// Sliding friction coefficient of the pair (for the friction cone).
+    pub mu: f64,
     /// A contact with the static world whose normal is mostly vertical: part of the support polygon.
     pub floor: bool,
 }
@@ -361,6 +363,7 @@ impl SimCore {
                 normal: c.normal,
                 normal_force: c.normal_force,
                 friction: c.friction_force,
+                mu: c.friction_coef,
                 floor: (is_world(c.geom1) || is_world(c.geom2)) && c.normal[2].abs() > 0.7,
             });
         }

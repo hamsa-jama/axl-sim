@@ -166,7 +166,9 @@ impl Plugin for StagePlugin {
             StageContent::Builder => {
                 app.add_plugins(crate::builder_view::BuilderPlugin);
             }
-            StageContent::Sandbox => {}
+            StageContent::Sandbox => {
+                app.add_plugins(crate::instruments::InstrumentsPlugin);
+            }
             StageContent::Stress(n) => {
                 app.insert_resource(StressBoxes(*n));
                 app.add_systems(Update, stress_source);

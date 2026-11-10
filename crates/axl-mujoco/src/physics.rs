@@ -407,6 +407,7 @@ impl Physics {
                 normal_force: f[0],
                 friction_force: [f[1], f[2]],
                 dist: c.dist,
+                friction_coef: c.friction[0],
                 geom1: GeomId(c.geom1 as usize),
                 geom2: GeomId(c.geom2 as usize),
             });

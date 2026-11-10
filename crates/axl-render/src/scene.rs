@@ -241,6 +241,11 @@ impl PartMaterials {
         h
     }
 
+    /// Every plastic, rubber and steel material made so far (for X-ray).
+    pub fn material_handles(&self) -> Vec<Handle<StandardMaterial>> {
+        self.cache.values().cloned().collect()
+    }
+
     /// A shared mesh by key; `make` builds it the first time.
     pub fn mesh(
         &mut self,

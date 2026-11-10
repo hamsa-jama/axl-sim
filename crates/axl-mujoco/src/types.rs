@@ -71,6 +71,8 @@ pub struct ContactInfo {
     pub friction_force: [f64; 2],
     /// Signed distance between the surfaces in metres (negative = penetration).
     pub dist: f64,
+    /// Sliding friction coefficient of the pair (the first of the contact's friction values).
+    pub friction_coef: f64,
     /// First geom of the pair.
     pub geom1: GeomId,
     /// Second geom of the pair.
