@@ -48,10 +48,16 @@ pub struct MissionScreen {
     replay_seed: usize,
     replay_t: f64,
     notice: String,
+    /// The program that was graded last, to watch it again in 3D.
+    last_wasm: Option<Vec<u8>>,
+    /// Grading just finished: the app moves to the Results screen.
+    just_graded: bool,
+    /// The learner asked to watch this seed in 3D.
+    watch: Option<u64>,
 }
 
 /// The newest `.axlbot` in the robots folder: the design a build mission (m12) is graded with.
-fn newest_design() -> Option<PathBuf> {
+pub fn newest_design() -> Option<PathBuf> {
     let dir = axl_build::io::robots_dir()?;
     std::fs::read_dir(dir)
         .ok()?
@@ -104,7 +110,37 @@ impl MissionScreen {
             replay_seed: 0,
             replay_t: 0.0,
             notice: String::new(),
+            last_wasm: None,
+            just_graded: false,
+            watch: None,
         })
+    }
+
+    /// The mission.
+    pub fn def(&self) -> &MissionDef {
+        &self.def
+    }
+
+    /// Remember this as the mission Home's Continue goes back to.
+    pub fn mark_opened(&mut self) {
+        self.progress.set_last(&self.def.id);
+        self.save();
+    }
+
+    /// True once after grading finishes.
+    pub fn take_just_graded(&mut self) -> bool {
+        std::mem::take(&mut self.just_graded)
+    }
+
+    /// The seed the learner asked to watch in 3D, with the program that was graded.
+    pub fn take_watch(&mut self) -> Option<(u64, Vec<u8>)> {
+        let seed = self.watch.take()?;
+        Some((seed, self.last_wasm.clone()?))
+    }
+
+    /// Say something on the mission panel.
+    pub fn say(&mut self, text: impl Into<String>) {
+        self.notice = text.into();
     }
 
     fn save(&mut self) {
@@ -127,10 +163,16 @@ impl MissionScreen {
         self.def.predict.is_some() && self.predicted().is_none()
     }
 
+    /// Check a built program on every grading seed (the `--grade` flag).
+    pub fn grade_program(&mut self, wasm: Vec<u8>) {
+        self.start_grading(wasm);
+    }
+
     fn start_grading(&mut self, wasm: Vec<u8>) {
         let def = self.def.clone();
         let hints_used = self.progress.hints_open(&def.id) > 0;
         let design = newest_design();
+        self.last_wasm = Some(wasm.clone());
         let (tx, rx) = crossbeam_channel::unbounded::<GradeMsg>();
         self.grading = Some(rx);
         std::thread::spawn(move || {
@@ -172,7 +214,7 @@ impl MissionScreen {
             .and_then(|r| r.trace.last())
             .map_or(0.0, |s| s.t);
         self.result = Some(run);
-        self.tab = Tab::Results;
+        self.just_graded = true;
         if was_failing && self.progress.hints_unlocked(&self.def.id) {
             self.notice = "Hints are unlocked now: open one when you are ready.".into();
         }
@@ -468,7 +510,7 @@ fn results_tab(ui: &mut egui::Ui, m: &mut MissionScreen, code: &mut CodeScreen, 
 
     // Replay of the recorded path.
     ui.strong("Replay");
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for (i, r) in run.runs.iter().enumerate() {
             let label = format!("seed {}", r.trace.seed);
             if ui.selectable_label(m.replay_seed == i, label).clicked() {
@@ -478,6 +520,13 @@ fn results_tab(ui: &mut egui::Ui, m: &mut MissionScreen, code: &mut CodeScreen, 
         }
     });
     if let Some(r) = run.runs.get(m.replay_seed) {
+        if ui
+            .button(format!("Watch seed {} in 3D", r.trace.seed))
+            .on_hover_text("Runs your program again in the mission's world on this seed")
+            .clicked()
+        {
+            m.watch = Some(r.trace.seed);
+        }
         let end = r.trace.last().map_or(0.0, |s| s.t);
         ui.add(
             egui::Slider::new(&mut m.replay_t, 0.0..=end.max(0.01))
@@ -532,4 +581,36 @@ fn results_tab(ui: &mut egui::Ui, m: &mut MissionScreen, code: &mut CodeScreen, 
         ui.separator();
     }
     submit_button(ui, m, code, busy);
+}
+
+/// The Results screen: the verdict of the last check, the metrics and the replay.
+pub fn results_panel(
+    mut contexts: EguiContexts,
+    m: Option<ResMut<MissionScreen>>,
+    code: Option<ResMut<CodeScreen>>,
+    mut inset: ResMut<LeftInset>,
+    top: Res<TopInset>,
+) -> Result {
+    let ctx = contexts.ctx_mut()?.clone();
+    let mut root = crate::nav::free_ui(&ctx, top.0);
+    let panel = egui::Panel::left("results_panel")
+        .default_size(560.0)
+        .min_size(360.0)
+        .show(&mut root, |ui| {
+            let (Some(mut m), Some(mut code)) = (m, code) else {
+                ui.heading("Results");
+                ui.label("Open a mission and check your solution to see results here.");
+                return;
+            };
+            let busy = m.grading.is_some() || code.submit_pending();
+            ui.heading(format!("Mission {}: {}", m.def.id, m.def.title));
+            if !m.notice.is_empty() {
+                ui.colored_label(egui::Color32::from_rgb(0xE0, 0xA0, 0x40), &m.notice);
+            }
+            egui::ScrollArea::vertical()
+                .id_salt("results_scroll")
+                .show(ui, |ui| results_tab(ui, &mut m, &mut code, busy));
+        });
+    inset.0 = panel.response.rect.width();
+    Ok(())
 }

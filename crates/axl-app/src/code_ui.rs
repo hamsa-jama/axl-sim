@@ -62,6 +62,11 @@ pub fn find_root() -> Option<PathBuf> {
 }
 
 impl CodeScreen {
+    /// What the program and the build have said, oldest first.
+    pub fn log_lines(&self) -> &[String] {
+        &self.program_log
+    }
+
     /// Open the screen for a mission.
     pub fn open(mission: &str, lang: Lang, run: bool) -> Result<Self, String> {
         let root =
@@ -307,6 +312,7 @@ pub fn code_panels(
     mut inset: ResMut<LeftInset>,
     top: Res<TopInset>,
     view: Option<ResMut<axl_render::camera_rig::ViewInsets>>,
+    robot: Option<Res<CodeRobot>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?.clone();
     let mut root = egui::Ui::new(
@@ -356,7 +362,7 @@ pub fn code_panels(
         .default_size(820.0)
         .min_size(420.0)
         .show(&mut root, |ui| {
-            toolbar(ui, s);
+            toolbar(ui, s, robot.as_ref().map(|r| r.seed));
             if s.conflict {
                 ui.horizontal(|ui| {
                     ui.colored_label(
@@ -390,10 +396,14 @@ pub fn code_panels(
     Ok(())
 }
 
-fn toolbar(ui: &mut egui::Ui, s: &mut CodeScreen) {
+fn toolbar(ui: &mut egui::Ui, s: &mut CodeScreen, robot_seed: Option<u64>) {
     let lang = s.session.project.lang;
     ui.horizontal_wrapped(|ui| {
         ui.strong(format!("Mission {}", s.session.project.mission));
+        if let Some(seed) = robot_seed {
+            ui.label(format!("Seed {seed}"))
+                .on_hover_text("The world you see is the one grading uses for this seed");
+        }
         ui.separator();
         for (l, name) in [(Lang::C, "C"), (Lang::Rust, "Rust")] {
             if ui.selectable_label(lang == l, name).clicked() {

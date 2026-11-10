@@ -195,3 +195,66 @@ fn the_line_track_guide_path_is_the_printed_line() {
             .is_none()
     );
 }
+
+#[test]
+fn what_is_drawn_matches_what_is_simulated() {
+    use axl_world::{ShapeKind, display_mat, euler_xyz_quat};
+    let worlds = builtin_worlds().unwrap();
+    let objects = builtin_objects().unwrap();
+    for (id, w) in &worlds {
+        let variants: Vec<Option<&str>> = if w.variants.is_empty() {
+            vec![None]
+        } else {
+            w.variants.iter().map(|v| Some(v.id.as_str())).collect()
+        };
+        for var in variants {
+            let b = build_world(w, var, 1, &objects, &fr()).unwrap();
+            // Every wall and every static shape has a picture, with the same name as its geom.
+            assert_eq!(
+                b.shapes.len(),
+                b.wall_geoms.len() + w.statics.len(),
+                "{id} {var:?}"
+            );
+            for s in &b.shapes {
+                assert!(
+                    b.worldbody.contains(&format!("name=\"{}\"", s.name)),
+                    "{id}"
+                );
+            }
+            // One picture per loose object, named like its body.
+            assert_eq!(b.objects.len(), b.object_bodies.len());
+            for (o, name) in b.objects.iter().zip(&b.object_bodies) {
+                assert_eq!(&o.body, name);
+            }
+            // The picture of the mat is the same area as the one the colour sensor reads.
+            match (display_mat(w, var), &b.mat) {
+                (Some(d), Some(m)) => {
+                    assert!(
+                        (d.min[0] - m.min[0]).abs() < 1e-9 && (d.max[1] - m.max[1]).abs() < 1e-3
+                    );
+                    assert!(d.width > m.width, "finer than the sensor's raster");
+                }
+                (None, None) => {}
+                other => panic!("{id}: mat mismatch {:?}", other.0.is_some()),
+            }
+        }
+    }
+    // The ramps tilt about y by their angle: a 15 degree ramp's quaternion has x = z = 0.
+    let b = build_world(&worlds["ramp_lab"], None, 1, &objects, &fr()).unwrap();
+    let r = b.shapes.iter().find(|s| s.name == "ramp_15").unwrap();
+    assert!(matches!(r.kind, ShapeKind::Box(_)));
+    let half = (-15.0_f64).to_radians() / 2.0;
+    assert!((r.quat[0] - half.cos()).abs() < 1e-12 && (r.quat[2] - half.sin()).abs() < 1e-12);
+    assert!(r.quat[1].abs() < 1e-12 && r.quat[3].abs() < 1e-12);
+    // Euler sequence xyz is intrinsic: rotating 90 degrees about x then 90 about z.
+    let q = euler_xyz_quat([
+        std::f64::consts::FRAC_PI_2,
+        0.0,
+        std::f64::consts::FRAC_PI_2,
+    ]);
+    let want = [0.5, 0.5, -0.5, 0.5];
+    assert!(
+        q.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-12),
+        "{q:?}"
+    );
+}

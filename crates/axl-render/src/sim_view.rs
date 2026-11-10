@@ -24,6 +24,8 @@ pub struct SandboxScene {
     pub parts: BTreeMap<u32, (String, String)>,
     /// Where the camera looks at the start (AXL frame, metres).
     pub focus: Vec3,
+    /// A camera home that replaces the default one (a mission frames its whole world).
+    pub home: Option<CameraHome>,
 }
 
 /// Spawn one entity per simulated body under `root`. Returns the camera home and the robot's first body, which the follow camera tracks.

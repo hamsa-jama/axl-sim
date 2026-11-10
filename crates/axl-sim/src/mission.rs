@@ -69,6 +69,14 @@ pub struct MissionSetup {
     pub pivot_joints: Vec<String>,
     /// Spawn pose.
     pub spawn: axl_world::Pose2,
+    /// The world definition and the variant that was built, so the app can draw the mat.
+    pub world: axl_world::WorldDef,
+    /// The variant of `world` for this seed.
+    pub variant: Option<String>,
+    /// Walls and static shapes as they are drawn.
+    pub shapes: Vec<axl_world::ShapeVisual>,
+    /// Loose objects as they are drawn.
+    pub objects: Vec<axl_world::ObjectVisual>,
 }
 
 fn friction() -> WorldFriction {
@@ -195,6 +203,10 @@ pub fn setup(
             limit_s: Some(m.time_limit_s),
         },
         spawn: built.spawn,
+        world: def.clone(),
+        variant: m.world.variant_for(seed).map(str::to_owned),
+        shapes: built.shapes.clone(),
+        objects: built.objects.clone(),
         compiled,
     })
 }
@@ -223,6 +235,48 @@ impl MissionSetup {
     /// The run seed.
     pub fn seed(&self) -> u64 {
         self.hw.seed
+    }
+
+    /// The mission's program config for `wasm`: the seed and the switched-off API of the mission.
+    pub fn program(&self, m: &MissionDef, wasm: Vec<u8>) -> ProgramConfig {
+        ProgramConfig {
+            wasm,
+            host: HostConfig {
+                disabled_api: m.disabled_api.clone(),
+                seed: self.seed(),
+                ..HostConfig::default()
+            },
+        }
+    }
+
+    /// Start the sim thread in this mission's world: the same world, robot, mat, pushes, battery
+    /// and seed as a graded run of this seed. With `wasm` the program runs; without it the robot
+    /// stands still. `paced` runs against the wall clock (the live view).
+    pub fn spawn_live(
+        &self,
+        m: &MissionDef,
+        wasm: Option<Vec<u8>>,
+        paced: bool,
+    ) -> Result<crate::Sandbox, SimError> {
+        crate::Sandbox::spawn_scenario(
+            &self.compiled,
+            &[],
+            self.hw,
+            wasm.map(|w| self.program(m, w)),
+            paced,
+            &self.scenario,
+        )
+    }
+
+    /// MuJoCo body id of each loose object, in the order of `objects` (`None` if the model has no
+    /// such body).
+    pub fn object_body_ids(&self) -> Result<Vec<Option<usize>>, SimError> {
+        let core = self.core()?;
+        Ok(self
+            .objects
+            .iter()
+            .map(|o| core.physics().body_id(&o.body).ok().map(|b| b.0))
+            .collect())
     }
 }
 
@@ -442,14 +496,7 @@ pub fn run_seed(
 ) -> Result<(SeedRun, EvalContext), MissionRunError> {
     let s = setup(m, seed, asm, cat)?;
     let core = s.core()?;
-    let program = wasm.map(|w| ProgramConfig {
-        wasm: w.to_vec(),
-        host: HostConfig {
-            disabled_api: m.disabled_api.clone(),
-            seed,
-            ..HostConfig::default()
-        },
-    });
+    let program = wasm.map(|w| s.program(m, w.to_vec()));
     let Headless {
         recorder,
         end,
@@ -656,7 +703,13 @@ fn sensor_measure(key: &str, core: &mut SimCore) -> Option<f64> {
         .map(|(_, s)| *s);
     match key {
         "sees_angled_wall" => {
-            let d = core.hardware().distance(first_range?)?;
+            // The question asks about the ultrasonic sensor, so read that one even when the
+            // robot also has a time-of-flight sensor (m05's robot has both).
+            let ultrasonic = devices
+                .iter()
+                .find(|(_, s)| matches!(s, Slot::Ultrasonic(_)))
+                .map(|(_, s)| *s)?;
+            let d = core.hardware().distance(ultrasonic)?;
             Some(if d > 0.0 { 1.0 } else { 0.0 })
         }
         "sensor_range_m" => {

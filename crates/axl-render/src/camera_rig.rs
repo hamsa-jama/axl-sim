@@ -362,7 +362,8 @@ fn apply_camera_mode(
     mut cams: Query<(&mut Transform, &mut Projection, &mut PanOrbitCamera), With<ViewCamera>>,
     lighting: Res<LightingConfig>,
 ) {
-    if *last == Some(*mode) {
+    // A new home (a new scene on the stage) frames the camera again in the current mode.
+    if *last == Some(*mode) && !home.is_changed() {
         return;
     }
     let first = last.is_none();

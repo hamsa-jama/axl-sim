@@ -14,7 +14,10 @@ pub mod library;
 pub mod maze;
 pub mod objects;
 
-pub use build::{BuiltWorld, MatRaster, WorldFriction, build_world};
+pub use build::{
+    BuiltWorld, MatRaster, ObjectVisual, ShapeKind, ShapeVisual, WorldFriction, build_world,
+    display_mat, euler_xyz_quat,
+};
 pub use def::{
     MatDef, MatShape, MazeDef, ObjectPlacement, Pose2, Primitive, StaticShape, VariantDef, WallDef,
     WorldDef, Zone, ZoneShape,

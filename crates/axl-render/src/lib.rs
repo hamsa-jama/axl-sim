@@ -28,7 +28,9 @@ pub mod quality;
 pub mod scene;
 pub mod sim_view;
 pub mod stage;
+pub mod stage_swap;
 pub mod sync;
+pub mod world_view;
 
 pub use bevy;
 pub use stage::{BenchmarkFinished, RenderOptions, StageContent, StagePlugin};

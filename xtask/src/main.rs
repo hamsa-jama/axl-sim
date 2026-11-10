@@ -3,6 +3,7 @@
 mod fetch_mujoco;
 mod mujoco_checksums;
 mod mujoco_env;
+mod package;
 mod sdk_check;
 
 use std::path::PathBuf;
@@ -34,8 +35,13 @@ enum Command {
         #[arg(long)]
         require_rust: bool,
     },
-    /// Build the release package for this OS (arrives with M10).
-    Package,
+    /// Build the release package for this OS (M10).
+    Package {
+        /// Pass `--ignore-rust-version` to the release build (same as AXL_IGNORE_RUST_VERSION=1),
+        /// for a machine whose Rust is slightly older than the pinned toolchain.
+        #[arg(long)]
+        ignore_rust_version: bool,
+    },
     /// Write assets/parts/*.ron from the generator in axl-parts.
     GenParts,
     /// Prefilter the HDRI into KTX2 cubemaps, only if M2 needs it.
@@ -70,7 +76,9 @@ fn main() -> Result<()> {
                 require_rust,
             },
         ),
-        Command::Package => not_yet("package", "M10"),
+        Command::Package {
+            ignore_rust_version,
+        } => package::run_package(&workspace_root(), ignore_rust_version),
         Command::GenParts => {
             let n = axl_parts::catalog::write_builtin(&workspace_root().join("assets/parts"))?;
             println!("wrote {n} part files to assets/parts");

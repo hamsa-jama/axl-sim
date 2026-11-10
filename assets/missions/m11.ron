@@ -21,8 +21,8 @@ A classic rule is *keep one hand on the wall*: always turn right if you can, oth
 otherwise turn left, otherwise turn around. It finds the way out of any maze like this.
 "#,
     predict: Some((
-        question: "How many cells long is the shortest way from the start cell to the goal cell on the first layout?",
-        unit: "cells",
+        question: "How many moves does the shortest way from the start cell to the goal cell take on the first layout? One move goes from a cell into the next cell, so the start cell itself does not count.",
+        unit: "moves",
         measured: "shortest_path_cells",
     )),
     criteria: [ReachZone(zone: "goal", within_s: 120.0)],

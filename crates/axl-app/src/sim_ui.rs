@@ -1080,6 +1080,7 @@ pub fn install(app: &mut App, script: Script, switch_on: &[usize], collect_inbox
         Update,
         (instruments_tick, instruments_input)
             .chain()
+            .run_if(resource_exists::<SandboxSim>)
             .before(axl_render::sync::sync_bodies),
     );
 }

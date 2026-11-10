@@ -2,7 +2,7 @@
 //! the real answer to the prediction question, and the brief as headings and paragraphs. The screen
 //! itself (egui) only draws these.
 
-use crate::def::{Criterion, Expected};
+use crate::def::{Criterion, Expected, MissionDef, MissionEvent, RobotSource};
 use crate::eval::Grade;
 use crate::trace::RunTrace;
 
@@ -113,6 +113,101 @@ fn mm(m: f64) -> String {
 
 fn deg(r: f64) -> String {
     format!("{:.0} degrees", r.to_degrees())
+}
+
+/// The zones that the criteria (and star rules) of a mission refer to, in name order: the areas
+/// worth marking on the floor.
+pub fn zone_names(m: &MissionDef) -> Vec<String> {
+    let mut v: Vec<String> = m
+        .criteria
+        .iter()
+        .chain(m.stars.iter().flat_map(|s| s.criteria.iter()))
+        .filter_map(|c| match c {
+            Criterion::ReachZone { zone, .. } | Criterion::FinishWithin { zone, .. } => {
+                Some(zone.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    v.sort();
+    v.dedup();
+    v
+}
+
+/// The headline of the brief: its first Markdown heading, or the title.
+pub fn goal_line(m: &MissionDef) -> String {
+    blocks(&m.brief_md)
+        .into_iter()
+        .find_map(|b| match b {
+            Block::Heading(h) => Some(h),
+            _ => None,
+        })
+        .unwrap_or_else(|| m.title.clone())
+}
+
+/// The rules of a mission in plain sentences: time, seeds, battery, what is switched off, pushes.
+pub fn rules(m: &MissionDef) -> Vec<String> {
+    let mut v = vec![format!("The run ends after {} s.", m.time_limit_s)];
+    let n = m.grading_seeds.len();
+    v.push(if n == 1 {
+        "Your program is graded once.".to_owned()
+    } else {
+        format!(
+            "Your program is graded on {n} runs (seeds {}); it has to succeed on every one.",
+            m.grading_seeds
+                .iter()
+                .map(u64::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    });
+    v.push(format!(
+        "The battery starts {}% charged{}.",
+        (m.battery_soc.1 * 100.0).round(),
+        if (m.battery_soc.1 - m.battery_soc.0).abs() > 1e-9 {
+            format!(
+                ", or anywhere from {}% to {}%, differently on each run",
+                (m.battery_soc.0 * 100.0).round(),
+                (m.battery_soc.1 * 100.0).round()
+            )
+        } else {
+            String::new()
+        }
+    ));
+    for api in &m.disabled_api {
+        v.push(format!(
+            "This mission switches off {api} so you can build your own controller."
+        ));
+    }
+    for e in &m.events {
+        match e {
+            MissionEvent::Push { t, impulse_ns } => v.push(format!(
+                "The Rover is pushed at {t} s (an impulse of {:.2} N s).",
+                impulse_ns.iter().map(|x| x * x).sum::<f64>().sqrt()
+            )),
+        }
+    }
+    v.push("Three hints unlock after your first run that does not pass.".to_owned());
+    v
+}
+
+/// The starter robot (or the building rules) in words.
+pub fn robot_text(m: &MissionDef) -> String {
+    match &m.robot {
+        RobotSource::Starter(id) => match id.as_str() {
+            "rover" => "The Rover: two medium motors (left, right) with 56 mm wheels, a ball caster, an ultrasonic sensor (eye) and a colour sensor (color).".to_owned(),
+            "rover_tof" => "The Rover with two distance sensors, the ultrasonic eye and the time-of-flight sensor tof, and the colour sensor color.".to_owned(),
+            other => format!("The starter robot \"{other}\"."),
+        },
+        RobotSource::Build { max_parts, allowed } => format!(
+            "You build the robot in the Builder, with at most {max_parts} parts{}.",
+            if allowed.is_empty() {
+                String::new()
+            } else {
+                format!(", from {} allowed parts", allowed.len())
+            }
+        ),
+    }
 }
 
 /// A criterion in words a learner can read before the run.
@@ -279,6 +374,44 @@ mod tests {
             ok,
             message: format!("{name} {ok}"),
         }
+    }
+
+    #[test]
+    fn every_mission_has_a_goal_rules_and_a_robot_description() {
+        for m in crate::library::builtin_missions().unwrap() {
+            assert!(!goal_line(&m).is_empty(), "{}", m.id);
+            let rules = rules(&m);
+            assert!(
+                rules[0].contains(&format!("{}", m.time_limit_s)),
+                "{}",
+                m.id
+            );
+            assert!(rules.iter().any(|r| r.contains("battery")), "{}", m.id);
+            for api in &m.disabled_api {
+                assert!(rules.iter().any(|r| r.contains(api.as_str())), "{}", m.id);
+            }
+            assert_eq!(
+                rules.iter().filter(|r| r.contains("is pushed")).count(),
+                m.events.len()
+            );
+            assert!(!robot_text(&m).is_empty());
+        }
+        let m5 = crate::library::mission("m05").unwrap();
+        assert_eq!(goal_line(&m5), "Stop 100 mm from the wall");
+        assert!(robot_text(&m5).contains("time-of-flight"));
+        let m12 = crate::library::mission("m12").unwrap();
+        assert!(robot_text(&m12).contains("at most 120 parts"));
+        assert_eq!(
+            zone_names(&crate::library::mission("m11").unwrap()),
+            ["goal"]
+        );
+        assert_eq!(
+            zone_names(&crate::library::mission("m12").unwrap()),
+            ["top_25"]
+        );
+        assert!(zone_names(&crate::library::mission("m01").unwrap()).is_empty());
+        let m7 = crate::library::mission("m07").unwrap();
+        assert!(rules(&m7).iter().any(|r| r.contains("motor_speed")));
     }
 
     fn grade(seeds: Vec<SeedResult>) -> Grade {

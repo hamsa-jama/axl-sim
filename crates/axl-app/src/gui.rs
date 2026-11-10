@@ -19,14 +19,21 @@ use crate::browser_ui::{LeftInset, TopInset, browser_panel};
 use crate::cli::Args;
 use crate::settings::Settings;
 
+/// The bars at the top and bottom, which the screens' panels are laid out after.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+struct BarsSet;
+
 /// Frames left before the app exits by itself (smoke tests only).
 #[derive(Resource)]
 struct FramesLeft(Option<u32>);
 
 /// Saved settings and where they live. `path` is `None` when this run must not touch disk.
 #[derive(Resource)]
-struct SettingsStore {
-    current: Settings,
+pub(crate) struct SettingsStore {
+    /// What the app holds now (the Settings screen edits the toolchain paths here).
+    pub(crate) current: Settings,
+    /// What was last written (or read), to see what changed.
+    saved: Settings,
     path: Option<std::path::PathBuf>,
 }
 
@@ -43,7 +50,6 @@ pub fn run(args: &Args) -> AppExit {
         || args.stress_boxes.is_some()
         || args.perf_seconds.is_some()
         || args.sandbox.is_some()
-        || args.code.is_some()
         || args.screenshot.is_some();
     let path = (!scripted).then(Settings::default_path).flatten();
     let current = match &path {
@@ -53,7 +59,7 @@ pub fn run(args: &Args) -> AppExit {
         }),
         None => Settings::default(),
     };
-    let path = path.filter(|_| true);
+    crate::screens::apply_toolchain_paths(&current);
 
     let forced = args.quality.as_deref().and_then(QualityPreset::parse);
     if let Some(q) = &args.quality
@@ -121,23 +127,9 @@ pub fn run(args: &Args) -> AppExit {
         None => None,
     };
 
-    let code = match args.code.as_deref().map(|m| {
-        let lang = match args.code_lang.as_deref() {
-            Some("rust") => axl_host::toolchain::Lang::Rust,
-            _ => axl_host::toolchain::Lang::C,
-        };
-        let screen = crate::code_ui::CodeScreen::open(m, lang, args.code_run)?;
-        let mission = crate::mission_ui::MissionScreen::open(m)?;
-        let (scene, sim, robot) = crate::sandbox::start_code()?;
-        Ok::<_, String>((screen, scene, sim, robot, mission))
-    }) {
-        Some(Ok(v)) => Some(v),
-        Some(Err(e)) => {
-            eprintln!("axl: --code: {e}");
-            return AppExit::error();
-        }
-        None => None,
-    };
+    // The look-dev, parts and stress views keep their own stage; everything else runs the screens.
+    let screens = !(args.lookdev || args.parts.is_some() || args.stress_boxes.is_some());
+    let code = args.code.clone();
 
     let options = RenderOptions {
         quality,
@@ -161,7 +153,7 @@ pub fn run(args: &Args) -> AppExit {
         perf_seconds: args.perf_seconds,
         view_mode: match args.view.as_deref() {
             Some("simulate") => ViewMode::Simulate,
-            _ if args.code.is_some() => ViewMode::Simulate,
+            _ if args.code.is_some() || args.sandbox.is_some() => ViewMode::Simulate,
             _ => ViewMode::Builder,
         },
         camera_mode: match args.camera.as_deref() {
@@ -173,6 +165,7 @@ pub fn run(args: &Args) -> AppExit {
         disable,
         env_mode,
         quality_reason: reason,
+        screens,
     };
 
     let size = args
@@ -238,7 +231,12 @@ pub fn run(args: &Args) -> AppExit {
     .insert_resource(CameraSettings {
         invert_orbit: current.invert_orbit,
     })
-    .insert_resource(SettingsStore { current, path })
+    .insert_resource(UiScale(current.ui_scale))
+    .insert_resource(SettingsStore {
+        saved: current.clone(),
+        current,
+        path,
+    })
     .init_resource::<LeftInset>()
     .init_resource::<TopInset>()
     .init_resource::<crate::builder_ui::BuilderUi>()
@@ -252,7 +250,17 @@ pub fn run(args: &Args) -> AppExit {
             remember_benchmark,
         ),
     )
-    .add_systems(EguiPrimaryContextPass, (control_bar, status_bar).chain())
+    .add_systems(
+        EguiPrimaryContextPass,
+        (
+            apply_ui_scale,
+            crate::nav::nav_bar,
+            control_bar.run_if(crate::nav::view_controls),
+            status_bar,
+        )
+            .chain()
+            .in_set(BarsSet),
+    )
     .add_systems(
         EguiPrimaryContextPass,
         browser_panel.run_if(resource_exists::<axl_render::browser::BrowserState>),
@@ -260,7 +268,8 @@ pub fn run(args: &Args) -> AppExit {
     .add_systems(
         EguiPrimaryContextPass,
         crate::builder_ui::builder_panels
-            .run_if(resource_exists::<axl_render::builder_view::BuilderRes>),
+            .run_if(resource_exists::<axl_render::builder_view::BuilderRes>)
+            .run_if(crate::nav::builder_visible),
     )
     .add_systems(Update, crate::builder_ui::autosave)
     // The gizmo sits in what the panels leave free, so it never covers one.
@@ -279,50 +288,149 @@ pub fn run(args: &Args) -> AppExit {
         }
         None => Default::default(),
     };
+    if !screens {
+        app.insert_resource(crate::nav::Nav::new(false, crate::nav::Screen::Home));
+        return app.run();
+    }
+    install_screens(&mut app, args, sandbox, code, script, &switch_on);
+    app.run()
+}
+
+/// Wire up the seven screens: the navigation, the per-screen panels and the systems that only
+/// make sense while a mission or the sandbox is open.
+fn install_screens(
+    app: &mut App,
+    args: &Args,
+    sandbox: Option<(
+        axl_render::sim_view::SandboxScene,
+        crate::sandbox::SandboxSim,
+    )>,
+    code: Option<String>,
+    script: crate::sim_ui::Script,
+    switch_on: &[usize],
+) {
+    use crate::nav::{Action, Library, Nav, Screen, on};
+
+    let named = args.screen.as_deref().map(|s| match s {
+        "home" => Ok(Screen::Home),
+        "missions" => Ok(Screen::Missions),
+        "builder" => Ok(Screen::Builder),
+        "code" => Ok(Screen::Code),
+        "simulate" => Ok(Screen::Simulate),
+        "results" => Ok(Screen::Results),
+        "settings" | "about" => Ok(Screen::Settings),
+        other => Err(other.to_owned()),
+    });
+    let named = match named {
+        Some(Ok(s)) => Some(s),
+        Some(Err(o)) => {
+            eprintln!(
+                "axl: --screen {o:?}: use home, missions, builder, code, simulate, results, settings or about"
+            );
+            None
+        }
+        None => None,
+    };
+    let first = if code.is_some() {
+        named.unwrap_or(Screen::Code)
+    } else if sandbox.is_some() {
+        Screen::Simulate
+    } else if args.builder {
+        Screen::Builder
+    } else {
+        named.unwrap_or(Screen::Home)
+    };
+    let mut nav = Nav::new(true, first);
+    nav.open_to = named.unwrap_or(Screen::Code);
+    nav.about = args.screen.as_deref() == Some("about");
+    nav.detail.clone_from(&args.detail);
+    nav.grade_file.clone_from(&args.grade);
+    if code.is_none() && sandbox.is_none() && !args.builder && named.is_some() {
+        nav.pending = Some(Action::Go(first));
+    }
+    nav.lang = match args.code_lang.as_deref() {
+        Some("rust") => axl_host::toolchain::Lang::Rust,
+        _ => axl_host::toolchain::Lang::C,
+    };
+    nav.run_first = args.code_run;
+    if let Some(m) = code {
+        nav.pending = Some(Action::OpenMission(m));
+    }
     if let Some((scene, sim)) = sandbox {
         app.insert_resource(scene).insert_resource(sim);
-        crate::sim_ui::install(&mut app, script.clone(), &switch_on, false);
-        app.add_systems(
-            EguiPrimaryContextPass,
-            crate::sim_ui::instruments_ui
-                .after(control_bar)
-                .after(status_bar),
-        );
     }
-    if let Some((screen, scene, sim, robot, mission)) = code {
-        app.init_resource::<axl_render::camera_rig::ViewInsets>();
-        app.insert_resource(screen)
-            .insert_resource(scene)
-            .insert_resource(sim)
-            .insert_resource(robot)
-            .insert_resource(mission);
-        crate::sim_ui::install(&mut app, script, &switch_on, true);
-        app.add_systems(
-            Update,
-            crate::code_ui::code_tick
-                .after(crate::sim_ui::instruments_tick)
-                .before(axl_render::sync::sync_bodies),
-        )
-        .add_systems(
-            EguiPrimaryContextPass,
-            crate::code_ui::code_panels
-                .after(control_bar)
-                .after(status_bar),
-        );
-        app.add_systems(
-            Update,
-            crate::mission_ui::mission_tick.after(crate::code_ui::code_tick),
-        );
-        app.add_systems(
-            EguiPrimaryContextPass,
-            crate::mission_ui::mission_panel.after(crate::code_ui::code_panels),
-        );
-        app.add_systems(
-            EguiPrimaryContextPass,
-            crate::sim_ui::instruments_ui.after(crate::code_ui::code_panels),
-        );
-    }
-    app.run()
+    app.insert_resource(nav)
+        .insert_resource(Library::load())
+        .init_resource::<axl_render::camera_rig::ViewInsets>()
+        .init_resource::<crate::screens::DriveVolts>();
+    crate::sim_ui::install(app, script, switch_on, true);
+    app.add_systems(
+        Update,
+        crate::nav::apply_nav.before(axl_render::sync::sync_bodies),
+    )
+    .add_systems(
+        Update,
+        crate::code_ui::code_tick
+            .run_if(resource_exists::<crate::code_ui::CodeScreen>)
+            .run_if(resource_exists::<crate::sandbox::SandboxSim>)
+            .after(crate::sim_ui::instruments_tick)
+            .before(axl_render::sync::sync_bodies),
+    )
+    .add_systems(
+        Update,
+        crate::mission_ui::mission_tick
+            .run_if(resource_exists::<crate::mission_ui::MissionScreen>)
+            .run_if(resource_exists::<crate::code_ui::CodeScreen>)
+            .after(crate::code_ui::code_tick),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        (crate::screens::home_screen.run_if(on(Screen::Home))).after(BarsSet),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        (crate::screens::missions_screen.run_if(on(Screen::Missions))).after(BarsSet),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        (crate::screens::settings_screen.run_if(on(Screen::Settings))).after(BarsSet),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        (crate::screens::simulate_screen
+            .run_if(on(Screen::Simulate))
+            .run_if(resource_exists::<crate::sandbox::SandboxSim>))
+        .after(BarsSet),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        (crate::mission_ui::results_panel.run_if(on(Screen::Results))).after(BarsSet),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        (crate::code_ui::code_panels
+            .run_if(on(Screen::Code))
+            .run_if(resource_exists::<crate::code_ui::CodeScreen>))
+        .after(BarsSet),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        crate::mission_ui::mission_panel
+            .run_if(on(Screen::Code))
+            .run_if(resource_exists::<crate::mission_ui::MissionScreen>)
+            .run_if(resource_exists::<crate::code_ui::CodeScreen>)
+            .after(crate::code_ui::code_panels)
+            .after(BarsSet),
+    )
+    .add_systems(
+        EguiPrimaryContextPass,
+        crate::sim_ui::instruments_ui
+            .run_if(crate::nav::instruments_visible)
+            .run_if(resource_exists::<crate::sandbox::SandboxSim>)
+            .after(crate::code_ui::code_panels)
+            .after(crate::screens::simulate_screen)
+            .after(BarsSet),
+    );
 }
 
 /// Bevy panics with "Unable to find a GPU!" when no adapter matches. Say what to do about it.
@@ -369,7 +477,7 @@ fn forward_egui_capture(wants: Res<EguiWantsInput>, mut ui: ResMut<UiCapture>) {
 }
 
 /// A root `Ui` that panels can attach to (egui 0.36 panels need a parent `Ui`).
-fn viewport_ui(ctx: &egui::Context) -> egui::Ui {
+pub(crate) fn viewport_ui(ctx: &egui::Context) -> egui::Ui {
     egui::Ui::new(
         ctx.clone(),
         "viewport".into(),
@@ -377,6 +485,16 @@ fn viewport_ui(ctx: &egui::Context) -> egui::Ui {
             .layer_id(egui::LayerId::background())
             .max_rect(ctx.viewport_rect()),
     )
+}
+
+/// Ctrl and plus/minus/0, and the zoom factor of egui following the setting.
+fn apply_ui_scale(mut contexts: EguiContexts, mut ui_scale: ResMut<UiScale>) -> Result {
+    let ctx = contexts.ctx_mut()?;
+    ui_scale.keys(ctx);
+    if (ctx.zoom_factor() - ui_scale.0).abs() > f32::EPSILON {
+        ctx.set_zoom_factor(ui_scale.0);
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -391,9 +509,22 @@ fn control_bar(
     home: Res<CameraHome>,
     mut cams: Query<&mut Transform, With<ViewCamera>>,
     mut top: ResMut<TopInset>,
+    mut ui_scale: ResMut<UiScale>,
+    nav: Res<crate::nav::Nav>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
-    let mut root = viewport_ui(ctx);
+    // The navigation bar (drawn before this one) took the top of the window.
+    let below_nav = if nav.active { top.0 } else { 0.0 };
+    let mut root = egui::Ui::new(
+        ctx.clone(),
+        "controls_root".into(),
+        egui::UiBuilder::new()
+            .layer_id(egui::LayerId::background())
+            .max_rect(egui::Rect::from_min_max(
+                ctx.viewport_rect().min + egui::vec2(0.0, below_nav),
+                ctx.viewport_rect().max,
+            )),
+    );
     let bar = egui::Panel::top("controls").show(&mut root, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label("Quality");
@@ -463,6 +594,20 @@ fn control_bar(
                     }
                 });
             ui.checkbox(&mut cam_settings.invert_orbit, "Invert orbit");
+            ui.label("UI scale");
+            let mut percent = (ui_scale.0 * 100.0).round() as i32;
+            if ui
+                .add(
+                    egui::DragValue::new(&mut percent)
+                        .range(100..=200)
+                        .speed(5)
+                        .suffix("%"),
+                )
+                .on_hover_text("Ctrl and plus, Ctrl and minus, Ctrl and 0")
+                .changed()
+            {
+                ui_scale.0 = percent as f32 / 100.0;
+            }
             if ui.button("Reset view").clicked()
                 && let Ok(mut tf) = cams.single_mut()
             {
@@ -588,6 +733,7 @@ fn remember_benchmark(
 ) {
     for d in done.read() {
         store.current.quality = Some(d.preset);
+        store.saved = store.current.clone();
         save(&store);
         match &store.path {
             Some(p) => eprintln!(
@@ -616,6 +762,7 @@ fn persist_settings(
     quality: Res<ActiveQuality>,
     grid: Res<GridSettings>,
     cam: Res<CameraSettings>,
+    ui_scale: Res<UiScale>,
     mut store: ResMut<SettingsStore>,
     mut started: Local<bool>,
 ) {
@@ -633,7 +780,9 @@ fn persist_settings(
     next.grid_opacity_builder = grid.opacity_builder;
     next.grid_opacity_simulate = grid.opacity_simulate;
     next.invert_orbit = cam.invert_orbit;
-    if next != store.current {
+    next.ui_scale = ui_scale.0;
+    if next != store.saved {
+        store.saved = next.clone();
         store.current = next;
         save(&store);
     }
@@ -682,5 +831,48 @@ mod backend_tests {
         assert!(unsupported_backend(Some("vulkan,gl")).is_none());
         assert!(unsupported_backend(None).is_none());
         assert!(unsupported_backend(Some("")).is_none());
+    }
+}
+
+/// The size of the whole UI (spec: 100 to 200%), kept in `settings.ron`.
+#[derive(Resource)]
+pub(crate) struct UiScale(pub(crate) f32);
+
+impl UiScale {
+    /// Ctrl and plus, Ctrl and minus (steps of 10%) and Ctrl and 0 (back to 100%).
+    fn keys(&mut self, ctx: &egui::Context) {
+        let (plus, minus, zero) = ctx.input(|i| {
+            let c = i.modifiers.command;
+            (
+                c && (i.key_pressed(egui::Key::Plus) || i.key_pressed(egui::Key::Equals)),
+                c && i.key_pressed(egui::Key::Minus),
+                c && i.key_pressed(egui::Key::Num0),
+            )
+        });
+        if plus {
+            self.0 = step_scale(self.0, 1);
+        } else if minus {
+            self.0 = step_scale(self.0, -1);
+        } else if zero {
+            self.0 = 1.0;
+        }
+    }
+}
+
+/// One 10% step up or down, kept between 100% and 200%.
+fn step_scale(scale: f32, dir: i32) -> f32 {
+    (((scale * 10.0).round() + dir as f32) / 10.0).clamp(1.0, 2.0)
+}
+
+#[cfg(test)]
+mod scale_tests {
+    use super::*;
+
+    #[test]
+    fn steps_stop_at_100_and_200_percent() {
+        assert_eq!(step_scale(1.0, -1), 1.0);
+        assert_eq!(step_scale(1.0, 1), 1.1);
+        assert_eq!(step_scale(1.9, 1), 2.0);
+        assert_eq!(step_scale(2.0, 1), 2.0);
     }
 }
