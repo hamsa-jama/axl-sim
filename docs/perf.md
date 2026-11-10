@@ -297,3 +297,23 @@ features (contact shadows, four soft cascades), not the environment path. New on
 per-material bind groups now that bindless is off. Follow-up (low priority): check whether that
 cost scales with the number of distinct materials and, if so, reduce the per-part roughness and
 brightness variation levels on Low.
+
+### Materials on Low (M8 follow-up)
+
+Question from the owner's laptop run: do `uniform_allocation` and `bin_unpacking` scale with the
+number of distinct materials once bindless is masked off? Yes. Under llvmpipe (debug build, 200
+boxes, `--quality low --perf-seconds 10`, 1280x720; the absolute times are CPU-rasteriser times, the
+ratio is what counts):
+
+| | unique materials | `uniform_allocation` | `bin_unpacking` | render CPU ms | fps |
+| --- | --- | --- | --- | --- | --- |
+| before (up to 9 variations per colour) | 69 | 8.62 ms | 2.55 ms | 251.5 | 3.9 |
+| after (one material per colour on Low) | 9 | 1.11 ms | 0.46 ms | 174.3 | 5.6 |
+
+Both passes fall in proportion to the material count, so Low now builds one material per colour
+(`QualitySettings::part_variation` is false on Low). Medium, High and Ultra keep the quantised
+per-part roughness and brightness variation (at most 9 materials per colour). Parts spawned after
+a quality change use the new preset's setting; parts already in the scene keep their materials.
+To repeat on the owner's laptop: `cargo run -p axl-app --release -- --stress-boxes 200 --quality low --perf-seconds 10`
+and compare `unique_materials` (should be 9) and the two GPU pass times with the 1.12 and 0.57 ms
+above.

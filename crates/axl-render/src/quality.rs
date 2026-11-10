@@ -58,6 +58,7 @@ impl QualityPreset {
                 ao: Off,
                 bloom: false,
                 micro_surface: false,
+                part_variation: false,
             },
             Self::Medium => QualitySettings {
                 render_scale: 1.0,
@@ -71,6 +72,7 @@ impl QualityPreset {
                 ao: Low,
                 bloom: true,
                 micro_surface: true,
+                part_variation: true,
             },
             Self::High => QualitySettings {
                 render_scale: 1.0,
@@ -84,6 +86,7 @@ impl QualityPreset {
                 ao: Medium,
                 bloom: true,
                 micro_surface: true,
+                part_variation: true,
             },
             Self::Ultra => QualitySettings {
                 render_scale: 1.0,
@@ -97,6 +100,7 @@ impl QualityPreset {
                 ao: High,
                 bloom: true,
                 micro_surface: true,
+                part_variation: true,
             },
         }
     }
@@ -154,6 +158,9 @@ pub struct QualitySettings {
     pub bloom: bool,
     /// Procedural micro-surface normal map on plastic.
     pub micro_surface: bool,
+    /// Per-part roughness and brightness variation (several materials per colour). Off on Low: one
+    /// material per colour batches best without bindless materials.
+    pub part_variation: bool,
 }
 
 /// Benchmark thresholds, read from `assets/render/quality.ron`.
@@ -261,13 +268,13 @@ mod tests {
         assert_eq!(low.aa, AaMode::Fxaa);
         assert_eq!(low.shadows.cascades, 1);
         assert_eq!(low.shadows.map_size, 1024);
-        assert!(!low.contact_shadows && !low.bloom && !low.micro_surface);
+        assert!(!low.contact_shadows && !low.bloom && !low.micro_surface && !low.part_variation);
         assert_eq!(low.ao, AoLevel::Off);
 
         let med = QualityPreset::Medium.settings();
         assert_eq!(med.aa, AaMode::Smaa);
         assert_eq!((med.shadows.cascades, med.shadows.map_size), (2, 2048));
-        assert!(!med.contact_shadows && med.bloom && med.micro_surface);
+        assert!(!med.contact_shadows && med.bloom && med.micro_surface && med.part_variation);
         assert_eq!(med.ao, AoLevel::Low);
 
         let high = QualityPreset::High.settings();

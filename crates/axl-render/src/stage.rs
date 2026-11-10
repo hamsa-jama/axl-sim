@@ -153,7 +153,11 @@ impl Plugin for StagePlugin {
             ))
             .add_systems(
                 Update,
-                (crate::sync::sync_bodies, crate::scene::apply_micro_surface),
+                (
+                    crate::sync::sync_bodies,
+                    crate::scene::apply_micro_surface,
+                    sync_part_variation,
+                ),
             );
 
         match &opts.content {
@@ -238,6 +242,7 @@ fn setup_stage(
     }
 
     let mut parts = PartMaterials::new(&mut images);
+    parts.vary = quality.0.settings().part_variation;
     let mut home = CameraHome::default();
     let mut focus = None;
     {
@@ -695,5 +700,15 @@ mod perf_summary_tests {
         assert_eq!(lines[2], "perf: gpu  20.70 ms  render/main_opaque_pass_3d");
         assert!(lines.iter().all(|l| !l.contains("main_pass/main_opaque")));
         assert_eq!(lines.len(), 5);
+    }
+}
+
+/// Parts made after a quality change use that preset's material variation (existing parts keep
+/// the materials they have).
+fn sync_part_variation(quality: Res<ActiveQuality>, parts: Option<ResMut<PartMaterials>>) {
+    if let Some(mut parts) = parts
+        && quality.is_changed()
+    {
+        parts.vary = quality.0.settings().part_variation;
     }
 }

@@ -152,6 +152,8 @@ type MaterialKey = (u32, MaterialKind, [u8; 3], i32, i32);
 pub struct PartMaterials {
     micro: Handle<Image>,
     plastics: Vec<Handle<StandardMaterial>>,
+    /// Per-part variation on (false: one material per colour).
+    pub vary: bool,
     cache: BTreeMap<MaterialKey, Handle<StandardMaterial>>,
     meshes: BTreeMap<String, Handle<Mesh>>,
 }
@@ -185,6 +187,7 @@ impl PartMaterials {
         });
         Self {
             micro: images.add(image),
+            vary: true,
             ..default()
         }
     }
@@ -201,7 +204,11 @@ impl PartMaterials {
         // Quantise to three levels each (minus, none, plus) so that parts with similar variation
         // share a material: separate materials cannot batch, and 200 unique ones cost 200 draws in
         // every pass. Rounding to 0.03 roughness and 1.5% brightness steps keeps the spec's range.
-        let (rq, bq) = quantised_variation(uid);
+        let (rq, bq) = if self.vary {
+            quantised_variation(uid)
+        } else {
+            (0, 0)
+        };
         let key = (0, kind, rgb, rq, bq);
         if let Some(h) = self.cache.get(&key) {
             return h.clone();
