@@ -1,4 +1,4 @@
-// Reference solution for m01: drive 0.952 m (the front of the plate is 32 mm ahead of the hub, so
+// Reference solution for m01: drive 0.952 m (the front of the plate is 48 mm ahead of the hub, so
 // the front ends at 1.0 m) with a smooth move of the wheels, then stay put.
 // A smooth move for both wheels: a trapezoid speed profile (accelerate, cruise, slow down) feeds a
 // new target to the motors' position loops every 10 ms. Starting and stopping gently keeps the tyres

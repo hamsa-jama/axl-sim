@@ -45,11 +45,6 @@ fn final_x_says_how_far_off() {
 
 #[test]
 fn moving_robot_fails_a_stop() {
-    let c = Criterion::FinalX {
-        x: 1.0,
-        tol_m: 0.05,
-        within_s: None,
-    };
     let r = check(
         &Criterion::FinalX {
             x: 0.5,
@@ -199,4 +194,257 @@ fn stars_are_earned_in_order_and_need_every_seed() {
     let bad = drive(0.1, 5.0, 8.0);
     let g = grade(&m, &ctx(), &[bad], false);
     assert_eq!((g.passed, g.stars), (false, 0));
+}
+
+// ---- Every criterion, on synthetic paths -------------------------------------------------
+
+/// A path through `(t, x, y, yaw)` keypoints, sampled every 10 ms with linear interpolation.
+fn path(points: &[(f64, f64, f64, f64)]) -> RunTrace {
+    let mut tr = RunTrace::default();
+    let end = points.last().unwrap().0;
+    let mut i = 0;
+    while f64::from(i) * 0.01 <= end + 1e-9 {
+        let t = f64::from(i) * 0.01;
+        let k = points
+            .windows(2)
+            .position(|w| t <= w[1].0 + 1e-9)
+            .unwrap_or(points.len() - 2);
+        let (a, b) = (points[k], points[k + 1]);
+        let f = if b.0 > a.0 {
+            ((t - a.0) / (b.0 - a.0)).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let x = a.1 + (b.1 - a.1) * f;
+        let y = a.2 + (b.2 - a.2) * f;
+        let speed = if f < 1.0 && b.0 > a.0 {
+            ((b.1 - a.1).hypot(b.2 - a.2)) / (b.0 - a.0)
+        } else {
+            0.0
+        };
+        tr.samples.push(Sample {
+            t,
+            pos: [x, y, 0.0],
+            yaw: a.3 + (b.3 - a.3) * f,
+            speed,
+            pivot: [x, y],
+            ..Sample::default()
+        });
+        i += 1;
+    }
+    tr
+}
+
+fn zone_ctx() -> EvalContext {
+    EvalContext {
+        zones: vec![axl_world::Zone {
+            name: "goal".into(),
+            shape: axl_world::ZoneShape::Rect {
+                min: [0.9, -0.1],
+                max: [1.1, 0.1],
+            },
+        }],
+        line_path: None,
+    }
+}
+
+#[test]
+fn reach_zone_and_finish_within_need_the_zone_in_time() {
+    let tr = path(&[
+        (0.0, 0.0, 0.0, 0.0),
+        (4.0, 1.0, 0.0, 0.0),
+        (6.0, 1.0, 0.0, 0.0),
+    ]);
+    for make in [
+        |within_s| Criterion::ReachZone {
+            zone: "goal".into(),
+            within_s,
+        },
+        |within_s| Criterion::FinishWithin {
+            zone: "goal".into(),
+            within_s,
+        },
+    ] {
+        assert!(check(&make(5.0), &zone_ctx(), &tr).ok);
+        let late = check(&make(3.0), &zone_ctx(), &tr);
+        assert!(!late.ok);
+        assert!(late.message.contains("too late"), "{}", late.message);
+    }
+    let never = path(&[(0.0, 0.0, 0.0, 0.0), (4.0, 0.3, 0.0, 0.0)]);
+    let r = check(
+        &Criterion::ReachZone {
+            zone: "goal".into(),
+            within_s: 9.0,
+        },
+        &zone_ctx(),
+        &never,
+    );
+    assert!(!r.ok && r.message.contains("Never"), "{}", r.message);
+    let unknown = check(
+        &Criterion::ReachZone {
+            zone: "nowhere".into(),
+            within_s: 9.0,
+        },
+        &zone_ctx(),
+        &tr,
+    );
+    assert!(!unknown.ok);
+}
+
+#[test]
+fn final_pose_checks_position_and_heading() {
+    let c = Criterion::FinalPose {
+        x: 1.0,
+        y: 0.5,
+        yaw: std::f64::consts::FRAC_PI_2,
+        pos_tol_m: 0.05,
+        yaw_tol_rad: 0.1,
+    };
+    let good = path(&[(0.0, 0.0, 0.0, 0.0), (3.0, 1.02, 0.49, 1.6)]);
+    assert!(check(&c, &ctx(), &good).ok);
+    let off = path(&[(0.0, 0.0, 0.0, 0.0), (3.0, 1.2, 0.5, 1.57)]);
+    assert!(!check(&c, &ctx(), &off).ok);
+    let crooked = path(&[(0.0, 0.0, 0.0, 0.0), (3.0, 1.0, 0.5, 0.5)]);
+    assert!(!check(&c, &ctx(), &crooked).ok);
+    // The heading wraps: -3 pi / 2 is the same direction as pi / 2.
+    let wrapped = path(&[(0.0, 0.0, 0.0, 0.0), (3.0, 1.0, 0.5, -4.712)]);
+    assert!(check(&c, &ctx(), &wrapped).ok);
+}
+
+#[test]
+fn turn_to_needs_the_angle_and_a_still_pivot() {
+    let c = Criterion::TurnTo {
+        yaw: std::f64::consts::PI,
+        tol_rad: 0.05,
+        drift_m: 0.03,
+    };
+    let good = path(&[(0.0, 0.0, 0.0, 0.0), (2.0, 0.01, 0.0, 3.15)]);
+    assert!(check(&c, &ctx(), &good).ok);
+    let under = path(&[(0.0, 0.0, 0.0, 0.0), (2.0, 0.0, 0.0, 2.9)]);
+    assert!(!check(&c, &ctx(), &under).ok);
+    // Right angle, but the robot swung wide.
+    let wide = path(&[(0.0, 0.0, 0.0, 0.0), (2.0, 0.2, 0.0, 3.14)]);
+    let r = check(&c, &ctx(), &wide);
+    assert!(!r.ok && r.message.contains("drifted"), "{}", r.message);
+    // Still turning at the end.
+    let mut moving = good.clone();
+    moving.samples.last_mut().unwrap().speed = 0.5;
+    assert!(!check(&c, &ctx(), &moving).ok);
+}
+
+#[test]
+fn waypoints_must_be_visited_in_order_and_the_robot_must_come_home() {
+    let c = Criterion::Waypoints {
+        points: vec![[0.5, 0.0], [0.5, 0.5], [0.0, 0.5]],
+        tol_m: 0.05,
+        end_tol_m: 0.1,
+    };
+    let square = path(&[
+        (0.0, 0.0, 0.0, 0.0),
+        (1.0, 0.5, 0.0, 0.0),
+        (2.0, 0.5, 0.5, 0.0),
+        (3.0, 0.0, 0.5, 0.0),
+        (4.0, 0.0, 0.0, 0.0),
+    ]);
+    assert!(check(&c, &ctx(), &square).ok);
+    let wrong_way = path(&[
+        (0.0, 0.0, 0.0, 0.0),
+        (1.0, 0.0, 0.5, 0.0),
+        (2.0, 0.5, 0.5, 0.0),
+        (3.0, 0.5, 0.0, 0.0),
+        (4.0, 0.0, 0.0, 0.0),
+    ]);
+    assert!(!check(&c, &ctx(), &wrong_way).ok);
+    let no_return = path(&[
+        (0.0, 0.0, 0.0, 0.0),
+        (1.0, 0.5, 0.0, 0.0),
+        (2.0, 0.5, 0.5, 0.0),
+        (3.0, 0.0, 0.5, 0.0),
+    ]);
+    let r = check(&c, &ctx(), &no_return);
+    assert!(
+        !r.ok && r.message.contains("from the start"),
+        "{}",
+        r.message
+    );
+    let missed = path(&[
+        (0.0, 0.0, 0.0, 0.0),
+        (1.0, 0.5, 0.0, 0.0),
+        (2.0, 0.0, 0.0, 0.0),
+    ]);
+    let r = check(&c, &ctx(), &missed);
+    assert!(!r.ok && r.message.contains("corner 2"), "{}", r.message);
+}
+
+#[test]
+fn mean_speed_is_taken_over_its_window_only() {
+    let c = Criterion::MeanSpeed {
+        from_s: 2.0,
+        to_s: 4.0,
+        target_ms: 0.2,
+        tol_ms: 0.02,
+    };
+    // Slow start (0.05 m/s for 2 s), then 0.2 m/s.
+    let tr = path(&[
+        (0.0, 0.0, 0.0, 0.0),
+        (2.0, 0.1, 0.0, 0.0),
+        (6.0, 0.9, 0.0, 0.0),
+    ]);
+    assert!(check(&c, &ctx(), &tr).ok);
+    let slow = path(&[(0.0, 0.0, 0.0, 0.0), (6.0, 0.6, 0.0, 0.0)]);
+    assert!(!check(&c, &ctx(), &slow).ok);
+    let short = path(&[(0.0, 0.0, 0.0, 0.0), (1.0, 0.2, 0.0, 0.0)]);
+    let r = check(&c, &ctx(), &short);
+    assert!(!r.ok && r.message.contains("shorter"), "{}", r.message);
+}
+
+#[test]
+fn heading_lock_checks_distance_sideways_drift_and_yaw() {
+    let c = Criterion::HeadingLock {
+        distance_m: 2.0,
+        max_lateral_m: 0.05,
+        max_yaw_rad: 0.05,
+    };
+    let good = path(&[(0.0, 0.0, 0.0, 0.0), (8.0, 2.01, 0.02, 0.02)]);
+    assert!(check(&c, &ctx(), &good).ok);
+    let drifted = path(&[(0.0, 0.0, 0.0, 0.0), (8.0, 2.0, 0.2, 0.02)]);
+    assert!(!check(&c, &ctx(), &drifted).ok);
+    let crooked = path(&[(0.0, 0.0, 0.0, 0.0), (8.0, 2.0, 0.0, 0.2)]);
+    assert!(!check(&c, &ctx(), &crooked).ok);
+    let short = path(&[(0.0, 0.0, 0.0, 0.0), (8.0, 1.5, 0.0, 0.0)]);
+    assert!(!check(&c, &ctx(), &short).ok);
+}
+
+#[test]
+fn believed_pose_needs_a_mark_close_to_the_truth() {
+    let c = Criterion::BelievedPose { tol_m: 0.05 };
+    let mut tr = path(&[(0.0, 0.0, 0.0, 0.0), (4.0, 1.0, 0.5, 0.0)]);
+    let r = check(&c, &ctx(), &tr);
+    assert!(!r.ok && r.message.contains("never called"), "{}", r.message);
+    tr.believed.push((3.9, [1.02, 0.51, 0.0]));
+    assert!(check(&c, &ctx(), &tr).ok);
+    tr.believed.push((4.0, [1.3, 0.5, 0.0]));
+    assert!(!check(&c, &ctx(), &tr).ok, "the last mark counts");
+}
+
+#[test]
+fn end_near_start_plot_and_parts() {
+    let c = Criterion::EndNearStart { tol_m: 0.1 };
+    let home = path(&[
+        (0.0, 0.0, 0.0, 0.0),
+        (2.0, 1.0, 0.0, 0.0),
+        (4.0, 0.03, 0.0, 0.0),
+    ]);
+    assert!(check(&c, &ctx(), &home).ok);
+    let away = path(&[(0.0, 0.0, 0.0, 0.0), (2.0, 1.0, 0.0, 0.0)]);
+    assert!(!check(&c, &ctx(), &away).ok);
+
+    let mut tr = path(&[(0.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0)]);
+    assert!(!check(&Criterion::UsedPlot, &ctx(), &tr).ok);
+    tr.plot_used = true;
+    assert!(check(&Criterion::UsedPlot, &ctx(), &tr).ok);
+
+    tr.part_count = 12;
+    assert!(check(&Criterion::MaxParts { n: 12 }, &ctx(), &tr).ok);
+    assert!(!check(&Criterion::MaxParts { n: 11 }, &ctx(), &tr).ok);
 }
