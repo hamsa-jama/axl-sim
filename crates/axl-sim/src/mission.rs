@@ -656,7 +656,13 @@ fn sensor_measure(key: &str, core: &mut SimCore) -> Option<f64> {
         .map(|(_, s)| *s);
     match key {
         "sees_angled_wall" => {
-            let d = core.hardware().distance(first_range?)?;
+            // The question asks about the ultrasonic sensor, so read that one even when the
+            // robot also has a time-of-flight sensor (m05's robot has both).
+            let ultrasonic = devices
+                .iter()
+                .find(|(_, s)| matches!(s, Slot::Ultrasonic(_)))
+                .map(|(_, s)| *s)?;
+            let d = core.hardware().distance(ultrasonic)?;
             Some(if d > 0.0 { 1.0 } else { 0.0 })
         }
         "sensor_range_m" => {
