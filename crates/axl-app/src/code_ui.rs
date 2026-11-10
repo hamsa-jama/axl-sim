@@ -271,6 +271,7 @@ pub fn code_panels(
     mut screen: ResMut<CodeScreen>,
     mut inset: ResMut<LeftInset>,
     top: Res<TopInset>,
+    view: Option<ResMut<axl_render::camera_rig::ViewInsets>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?.clone();
     let mut root = egui::Ui::new(
@@ -347,6 +348,10 @@ pub fn code_panels(
             log_view(ui, s);
         });
     inset.0 = panel.response.rect.width();
+    let free = root.available_rect_before_wrap();
+    if let Some(mut v) = view {
+        v.rect = Some([free.min.x, free.min.y, free.max.x, free.max.y]);
+    }
     Ok(())
 }
 

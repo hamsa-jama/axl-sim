@@ -251,7 +251,9 @@ fn setup_stage(
             focus = spawn_scene(&mut commands, root, &scene, &mut builder);
         }
         if let Some(sb) = sandbox {
-            home = crate::sim_view::spawn_sandbox(&mut commands, root, &sb, &mut builder);
+            let (h, f) = crate::sim_view::spawn_sandbox(&mut commands, root, &sb, &mut builder);
+            home = h;
+            focus = f;
         }
         if let Some(stress) = stress {
             home = CameraHome {

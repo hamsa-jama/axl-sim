@@ -110,6 +110,43 @@ pub struct CameraSettings {
     pub invert_orbit: bool,
 }
 
+/// The part of the window the 3D view may use, in logical pixels: what the egui panels leave
+/// free. Insert it (screens with side panels do) and the camera looks at the centre of that
+/// rectangle instead of the window centre, so "follow" and "focus" put the robot in the visible
+/// middle. The view still renders to the whole window, because egui draws on the same camera and a
+/// camera viewport would confine the panels too. Without the resource the window centre is used.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq)]
+pub struct ViewInsets {
+    /// Free rectangle `[left, top, right, bottom]` in logical pixels from the window origin.
+    pub rect: Option<[f32; 4]>,
+}
+
+/// Shift the projection so the camera's centre falls on the middle of the free rectangle.
+fn apply_view_insets(
+    insets: Option<Res<ViewInsets>>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut cams: Query<&mut Camera, With<ViewCamera>>,
+) {
+    let (Some(insets), Ok(win), Ok(mut cam)) = (insets, windows.single(), cams.single_mut()) else {
+        return;
+    };
+    let Some([l, t, r, b]) = insets.rect else {
+        return;
+    };
+    let size = UVec2::new(win.physical_width().max(1), win.physical_height().max(1));
+    let s = win.scale_factor();
+    let free_centre = Vec2::new((l + r) * 0.5, (t + b) * 0.5) * s;
+    let win_centre = size.as_vec2() * 0.5;
+    let view = bevy::camera::SubCameraView {
+        full_size: size,
+        offset: win_centre - free_centre,
+        size,
+    };
+    if cam.sub_camera_view != Some(view) {
+        cam.sub_camera_view = Some(view);
+    }
+}
+
 /// The active quality preset. Change it to re-apply every quality setting.
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ActiveQuality(pub QualityPreset);
@@ -268,8 +305,9 @@ impl Plugin for CameraRigPlugin {
             (
                 view_keys,
                 apply_camera_mode,
-                follow_target,
+                follow_target.after(crate::sync::sync_bodies),
                 apply_orbit_inversion,
+                apply_view_insets,
                 apply_quality,
             ),
         );
@@ -368,7 +406,8 @@ fn apply_camera_mode(
 fn follow_target(
     mode: Res<CameraMode>,
     focus: Res<FocusTarget>,
-    targets: Query<&GlobalTransform, Without<ViewCamera>>,
+    targets: Query<(&Transform, &GlobalTransform, Option<&ChildOf>), Without<ViewCamera>>,
+    parents: Query<&GlobalTransform>,
     mut last: Local<Option<Vec3>>,
     mut cams: Query<&mut Transform, With<ViewCamera>>,
 ) {
@@ -377,7 +416,15 @@ fn follow_target(
             focus
                 .0
                 .and_then(|e| targets.get(e).ok())
-                .map(|t| t.translation())
+                .map(|(local, global, parent)| {
+                    // The parent's transform is static, so parent x local is this frame's position
+                    // (the body's own GlobalTransform is only updated after this system runs, one
+                    // frame late, which at a low frame rate is a visible lag).
+                    match parent.and_then(|p| parents.get(p.parent()).ok()) {
+                        Some(p) => p.transform_point(local.translation),
+                        None => global.translation(),
+                    }
+                })
         })
         .flatten();
     if let (Some(now), Some(prev), Ok(mut tf)) = (current, *last, cams.single_mut()) {

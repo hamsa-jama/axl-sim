@@ -277,6 +277,7 @@ pub fn run(args: &Args) -> AppExit {
         );
     }
     if let Some((screen, scene, sim, robot)) = code {
+        app.init_resource::<axl_render::camera_rig::ViewInsets>();
         app.insert_resource(screen)
             .insert_resource(scene)
             .insert_resource(sim)
