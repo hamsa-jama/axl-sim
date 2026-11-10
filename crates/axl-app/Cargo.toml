@@ -28,6 +28,9 @@ axl-build = { path = "../axl-build" }
 axl-compile = { path = "../axl-compile" }
 axl-parts = { path = "../axl-parts" }
 axl-sim = { path = "../axl-sim" }
+axl-host = { path = "../axl-host" }
+axl-code = { path = "../axl-code" }
+crossbeam-channel = "0.5"
 directories = "6"
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"

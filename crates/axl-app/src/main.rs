@@ -8,6 +8,8 @@ mod browser_ui;
 mod builder_ui;
 mod cli;
 #[cfg(feature = "gui")]
+mod code_ui;
+#[cfg(feature = "gui")]
 mod gui;
 mod headless;
 #[cfg(feature = "gui")]

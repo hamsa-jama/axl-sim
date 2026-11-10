@@ -5,12 +5,14 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use axl_build::starter::build_starter;
+use axl_compile::Compiled;
 use axl_compile::{CompileOptions, PhysicsParams, compile};
+use axl_host::HostConfig;
 use axl_parts::catalog::Catalog;
 use axl_render::bevy::prelude::*;
 use axl_render::sim_view::SandboxScene;
 use axl_render::sync::{BodyPose, RenderSnapshot, SnapshotBuffer};
-use axl_sim::Sandbox;
+use axl_sim::{HwOptions, ProgramConfig, Sandbox};
 
 /// The running sim thread.
 #[derive(Resource)]
@@ -33,8 +35,8 @@ pub fn parse_volts(s: &str) -> Result<Vec<(String, f64)>, String> {
         .collect()
 }
 
-/// Compile the starter robot and start the sim thread.
-pub fn start(starter: &str, volts: &[(String, f64)]) -> Result<(SandboxScene, SandboxSim), String> {
+/// A compiled starter robot and what the renderer needs to draw it.
+fn build_robot(starter: &str) -> Result<(Compiled, SandboxScene), String> {
     let cat = Catalog::builtin();
     let asm = build_starter(&cat, starter).map_err(|e| e.to_string())?;
     let compiled = compile(
@@ -44,7 +46,6 @@ pub fn start(starter: &str, volts: &[(String, f64)]) -> Result<(SandboxScene, Sa
         &CompileOptions::default(),
     )
     .map_err(|e| e.to_string())?;
-    let sim = Sandbox::spawn(&compiled, volts).map_err(|e| e.to_string())?;
     let parts: BTreeMap<u32, (String, String)> = asm
         .parts
         .iter()
@@ -61,7 +62,41 @@ pub fn start(starter: &str, volts: &[(String, f64)]) -> Result<(SandboxScene, Sa
         parts,
         focus: Vec3::new(o[0] as f32, o[1] as f32, o[2] as f32),
     };
+    Ok((compiled, scene))
+}
+
+/// Compile the starter robot and start the sim thread.
+pub fn start(starter: &str, volts: &[(String, f64)]) -> Result<(SandboxScene, SandboxSim), String> {
+    let (compiled, scene) = build_robot(starter)?;
+    let sim = Sandbox::spawn(&compiled, volts).map_err(|e| e.to_string())?;
     Ok((scene, SandboxSim(Mutex::new(sim))))
+}
+
+/// The robot of the Code screen, kept so a program can be started on it again and again.
+#[derive(Resource)]
+pub struct CodeRobot(pub Compiled);
+
+/// The Code screen's robot (the Rover) standing still on the sim thread.
+pub fn start_code() -> Result<(SandboxScene, SandboxSim, CodeRobot), String> {
+    let (compiled, scene) = build_robot("rover")?;
+    let sim = Sandbox::spawn(&compiled, &[]).map_err(|e| e.to_string())?;
+    Ok((scene, SandboxSim(Mutex::new(sim)), CodeRobot(compiled)))
+}
+
+/// Start a built program on the robot.
+pub fn run_program(robot: &CodeRobot, wasm: Vec<u8>) -> Result<SandboxSim, String> {
+    Sandbox::spawn_program(
+        &robot.0,
+        &[],
+        HwOptions::default(),
+        ProgramConfig {
+            wasm,
+            host: HostConfig::default(),
+        },
+        true,
+    )
+    .map(|s| SandboxSim(Mutex::new(s)))
+    .map_err(|e| e.to_string())
 }
 
 /// Move the newest sim snapshot into the render buffer, once per new snapshot.

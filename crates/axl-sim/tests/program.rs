@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 
 use axl_build::starter::build_starter;
 use axl_compile::{CompileOptions, Compiled, PhysicsParams, compile};
-use axl_host::toolchain::{BuildRequest, Lang, build, find_wasi_sdk};
+use axl_host::toolchain::{
+    BuildRequest, Lang, ToolchainStatus, build, ensure_project, find_wasi_sdk,
+};
 use axl_host::{HostConfig, RunEnd, StopKind, WATCHDOG_MESSAGE};
 use axl_parts::catalog::Catalog;
 use axl_sim::{HwOptions, ProgramConfig, Sandbox, SimEvent};
@@ -51,6 +53,45 @@ fn build_c(name: &str, source: Option<&str>) -> Option<Vec<u8>> {
     Some(wasm)
 }
 
+/// Called when a toolchain is missing: CI sets `AXL_REQUIRE_TOOLCHAINS` so that is a failure there.
+fn skip(what: &str) {
+    assert!(
+        std::env::var_os("AXL_REQUIRE_TOOLCHAINS").is_none(),
+        "{what} is required here but not installed"
+    );
+    eprintln!("{what} not found: skipped");
+}
+
+/// Build the Rust m01 template for wasm32-wasip1 (a copy in a temp folder, like a learner's).
+fn build_rust_template() -> Option<Vec<u8>> {
+    if !ToolchainStatus::detect().rust_ready() {
+        return None;
+    }
+    let data = std::env::temp_dir().join(format!("axl-prog-{}-rust", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let project = ensure_project(
+        &data,
+        "m01",
+        Lang::Rust,
+        &repo().join("templates"),
+        &repo().join("sdk"),
+    )
+    .unwrap();
+    let out = build(
+        &BuildRequest {
+            lang: Lang::Rust,
+            project,
+            sdk: repo().join("sdk"),
+            wasi_sdk: None,
+        },
+        |_| {},
+    );
+    assert!(out.success, "build failed: {:?}", out.diagnostics);
+    let wasm = std::fs::read(out.wasm.unwrap()).unwrap();
+    let _ = std::fs::remove_dir_all(&data);
+    Some(wasm)
+}
+
 fn spawn(c: &Compiled, wasm: Vec<u8>, paced: bool) -> Sandbox {
     Sandbox::spawn_program(
         c,
@@ -87,12 +128,7 @@ fn wait_ended(sb: &Sandbox, secs: f64) -> (Result<RunEnd, String>, f64) {
     panic!("the program did not end within {secs} s");
 }
 
-#[test]
-fn the_c_template_drives_the_rover_up_to_the_wall_and_stops() {
-    let Some(wasm) = build_c("m01", None) else {
-        eprintln!("wasi-sdk not found: skipped");
-        return;
-    };
+fn drives_up_to_the_wall_and_stops(wasm: Vec<u8>) {
     let c = rover_with_wall();
     let mut sb = spawn(&c, wasm, false);
     let t = Instant::now();
@@ -113,6 +149,22 @@ fn the_c_template_drives_the_rover_up_to_the_wall_and_stops() {
 }
 
 #[test]
+fn the_c_template_drives_the_rover_up_to_the_wall_and_stops() {
+    match build_c("m01", None) {
+        Some(wasm) => drives_up_to_the_wall_and_stops(wasm),
+        None => skip("wasi-sdk"),
+    }
+}
+
+#[test]
+fn the_rust_template_drives_the_rover_up_to_the_wall_and_stops() {
+    match build_rust_template() {
+        Some(wasm) => drives_up_to_the_wall_and_stops(wasm),
+        None => skip("the wasm32-wasip1 Rust target"),
+    }
+}
+
+#[test]
 fn an_endless_loop_shows_the_watchdog_message_within_2_5_s() {
     let Some(wasm) = build_c(
         "loop",
@@ -120,7 +172,7 @@ fn an_endless_loop_shows_the_watchdog_message_within_2_5_s() {
             "#include \"axl.h\"\nint main(void) {\n    axl_init(AXL_ABI_VERSION);\n    volatile int x = 0;\n    for (;;) { x++; }\n}\n",
         ),
     ) else {
-        eprintln!("wasi-sdk not found: skipped");
+        skip("wasi-sdk");
         return;
     };
     let c = rover_with_wall();
@@ -138,7 +190,7 @@ fn an_endless_loop_shows_the_watchdog_message_within_2_5_s() {
 fn a_wrong_device_call_reports_the_source_line() {
     let src = "#include \"axl.h\"\n\nint main(void) {\n    axl_init(AXL_ABI_VERSION);\n    int eye = axl_device_named(\"eye\");\n    axl_motor_power(eye, 0.5);\n    return 0;\n}\n";
     let Some(wasm) = build_c("wrongdev", Some(src)) else {
-        eprintln!("wasi-sdk not found: skipped");
+        skip("wasi-sdk");
         return;
     };
     let c = rover_with_wall();
@@ -157,7 +209,7 @@ fn a_wrong_device_call_reports_the_source_line() {
 fn a_program_that_returns_brakes_the_motors_and_the_sim_runs_on() {
     let src = "#include \"axl.h\"\nint main(void) {\n    axl_init(AXL_ABI_VERSION);\n    int l = axl_device_named(\"left\");\n    int r = axl_device_named(\"right\");\n    axl_motor_power(l, 0.5);\n    axl_motor_power(r, 0.5);\n    axl_step(500);\n    return 0;\n}\n";
     let Some(wasm) = build_c("returns", Some(src)) else {
-        eprintln!("wasi-sdk not found: skipped");
+        skip("wasi-sdk");
         return;
     };
     let c = rover_with_wall();

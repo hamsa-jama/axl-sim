@@ -43,6 +43,7 @@ pub fn run(args: &Args) -> AppExit {
         || args.stress_boxes.is_some()
         || args.perf_seconds.is_some()
         || args.sandbox.is_some()
+        || args.code.is_some()
         || args.screenshot.is_some();
     let path = (!scripted).then(Settings::default_path).flatten();
     let current = match &path {
@@ -120,11 +121,28 @@ pub fn run(args: &Args) -> AppExit {
         None => None,
     };
 
+    let code = match args.code.as_deref().map(|m| {
+        let lang = match args.code_lang.as_deref() {
+            Some("rust") => axl_host::toolchain::Lang::Rust,
+            _ => axl_host::toolchain::Lang::C,
+        };
+        let screen = crate::code_ui::CodeScreen::open(m, lang, args.code_run)?;
+        let (scene, sim, robot) = crate::sandbox::start_code()?;
+        Ok::<_, String>((screen, scene, sim, robot))
+    }) {
+        Some(Ok(v)) => Some(v),
+        Some(Err(e)) => {
+            eprintln!("axl: --code: {e}");
+            return AppExit::error();
+        }
+        None => None,
+    };
+
     let options = RenderOptions {
         quality,
         content: match args.stress_boxes {
             Some(n) => StageContent::Stress(n),
-            None if sandbox.is_some() => StageContent::Sandbox,
+            None if sandbox.is_some() || code.is_some() => StageContent::Sandbox,
             None if args.builder => StageContent::Builder,
             None => match &args.parts {
                 Some(q) => StageContent::Parts(axl_render::browser::BrowserState {
@@ -142,6 +160,7 @@ pub fn run(args: &Args) -> AppExit {
         perf_seconds: args.perf_seconds,
         view_mode: match args.view.as_deref() {
             Some("simulate") => ViewMode::Simulate,
+            _ if args.code.is_some() => ViewMode::Simulate,
             _ => ViewMode::Builder,
         },
         camera_mode: match args.camera.as_deref() {
@@ -165,7 +184,8 @@ pub fn run(args: &Args) -> AppExit {
         || args.stress_boxes.is_some()
         || args.parts.is_some()
         || args.builder
-        || args.sandbox.is_some();
+        || args.sandbox.is_some()
+        || args.code.is_some();
     let mut app = App::new();
     // Ask for the high-performance (discrete) adapter on hybrid-graphics laptops. WGPU_POWER_PREF
     // and WGPU_BACKEND in the environment still override this, so the owner can test other adapters.
@@ -255,6 +275,25 @@ pub fn run(args: &Args) -> AppExit {
             Update,
             crate::sandbox::pump.before(axl_render::sync::sync_bodies),
         );
+    }
+    if let Some((screen, scene, sim, robot)) = code {
+        app.insert_resource(screen)
+            .insert_resource(scene)
+            .insert_resource(sim)
+            .insert_resource(robot)
+            .add_systems(
+                Update,
+                (
+                    crate::code_ui::code_tick,
+                    crate::sandbox::pump.before(axl_render::sync::sync_bodies),
+                ),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                crate::code_ui::code_panels
+                    .after(control_bar)
+                    .after(status_bar),
+            );
     }
     app.run()
 }

@@ -161,6 +161,10 @@ mod tests {
     fn the_c_template_builds_and_an_error_gives_a_position() {
         let (mut s, data) = session("c");
         if !s.toolchain.c_ready() {
+            assert!(
+                std::env::var_os("AXL_REQUIRE_TOOLCHAINS").is_none(),
+                "wasi-sdk is required here"
+            );
             eprintln!("wasi-sdk not found: skipped");
             return;
         }
