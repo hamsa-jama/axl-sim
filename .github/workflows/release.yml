@@ -24,6 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: The tag matches the version in Cargo.toml
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "Cargo.toml says $version, the tag is $GITHUB_REF_NAME"
+          test "v$version" = "$GITHUB_REF_NAME"
+
       - name: Linux system packages for Bevy
         if: runner.os == 'Linux'
         run: |
@@ -80,4 +87,5 @@ jobs:
             dist/package-*/*
             dist/validation-report-ubuntu-24.04/report.md
             dist/validation-report-ubuntu-24.04/report.json
+          fail_on_unmatched_files: true
           generate_release_notes: true
