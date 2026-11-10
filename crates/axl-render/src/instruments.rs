@@ -455,7 +455,7 @@ fn draw_balance(g: &mut Gizmos<OverlayGizmos>, view: &LiveView) {
     }
     // A tick when the dropped point is inside the polygon, a cross when it is not, so the colour
     // is never the only signal.
-    let s = 0.008;
+    let s = 0.012;
     let at = |dx: f64, dy: f64| v3([foot[0] + dx, foot[1] + dy, 0.002]);
     if inside {
         g.linestrip([at(-s, 0.0), at(-s * 0.3, -s * 0.8), at(s * 1.2, s)], col);

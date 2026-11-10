@@ -69,3 +69,20 @@ the end of the program). `axl-code` is the Code screen's logic without a window 
 parsed from `sdk/c/axl.h`, highlighting, file watching, build sessions); `axl-app::code_ui` is
 only egui. The SDKs are `sdk/c/axl.h` (authoritative) and `sdk/rust/axl-robot` (mirrors it).
 Try it: `axl --code m01 --code-run`.
+
+## After M8
+
+The instruments sit on both sides of the sim-thread boundary. On the sim thread (`axl-sim`),
+`Command` gained `Step`, `Rewind`, `Pick`, `ApplyDragForce` and `ClearDrag`, and `SimEvent` gained
+`Restarted`, `Picked` and `Checkpoint`; `SimSnapshot` now carries per-body inspector data, hinge
+angle, speed and torque, contacts with forces, the robot's centre of mass, the sensor visuals
+(`axl_hw::SensorVisual`) and the built-in plot channels. Rewind restarts the controller and
+replays from 0 with drag forces replayed by simulated millisecond; whole-second `Checkpoint`s carry
+a joint-position hash and poses for the scrub preview. `axl_sim::plot::PlotStore` keeps the
+plotter's series and writes and parses the CSV. In the app, `sim_ui.rs` (`Instruments` resource,
+`instruments_tick`, `instruments_input`, `instruments_ui`) drains the events, fills
+`axl_render::instruments::LiveView` and `Trails`, handles keys and the mouse and draws the egui
+panels; the overlays themselves are gizmos in `axl_render::instruments`, converted with
+`axl_to_bevy`. The Code screen and `--sandbox` use the same instruments. Choices: decision 0014.
+Try it: `axl --sandbox rover --volts left=2,right=2` (keys 1 to 7, Space, `.`, `[`, `]`, Ctrl+R, drag
+with the left button).

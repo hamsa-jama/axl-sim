@@ -7,3 +7,6 @@ The `axl` binary: screens, wiring, and the headless command-line mode.
 - Build with `--no-default-features` to leave out Bevy and egui entirely.
 
 Only this crate and `axl-render` may depend on Bevy.
+
+M8: `sim_ui.rs` is the instruments' UI (time bar, overlay switches, inspector, joint hover,
+plotter with CSV export, mouse spring). Hidden `--instruments LIST` scripts it for screenshots.
