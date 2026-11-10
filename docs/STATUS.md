@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M6 Hardware is accepted and merged into `main` (merge commit 7143c58); the next milestone is M7 Controllers (not started). `fix/env-single-default` is merged (4245eb7, decision 0011). Open items: owner checks O10 to O14 (tags `m03-done` and `m05-done` still need pushing: O8, O13), and the low-priority render follow-up from the owner's laptop run: GPU `uniform_allocation` and `bin_unpacking` grew on Low after the bindless mask; check whether they scale with the number of distinct materials and, if so, reduce per-part roughness/brightness variation levels on Low (record before and after under llvmpipe).
+M7 Controllers is accepted and merged into `main` (merge commit 7771a38); the next milestone is M8 (not started). Open items: owner checks O8, O13 to O16 (tags `m03-done`, `m05-done`, `m06-done`, `m07-done` still need pushing), and the low-priority render follow-up from the owner's laptop run: GPU `uniform_allocation` and `bin_unpacking` grew on Low after the bindless mask; check whether they scale with the number of distinct materials and, if so, reduce per-part roughness/brightness variation levels on Low (record before and after under llvmpipe). Known unrelated problem: `cargo check -p axl-app --no-default-features` fails because `settings.rs` uses `axl_render` unconditionally (decision 0013).
 
 ## Owner checks
 
@@ -43,7 +43,7 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | O13 | M5 | Push the `m05-done` tag (sandbox push refused) | `git fetch origin && git tag -a m05-done -m "M5 compiler accepted" 02da742 && git push origin m05-done` (02da742 is the M5 merge commit named in Where I stopped). |
 
 | O14 | M6 | Push the `m06-done` tag (sandbox push refused) | `git fetch origin && git tag -a m06-done -m "M6 hardware accepted" 7143c58 && git push origin m06-done` (7143c58 is the M6 merge commit). |
-| O15 | M7 | Push the `m07-done` tag (sandbox push refused) | `git fetch origin && git tag -a m07-done -m "M7 controllers accepted" MERGE_SHA && git push origin m07-done` (MERGE_SHA is in "Where I stopped"). |
+| O15 | M7 | Push the `m07-done` tag (sandbox push refused) | `git fetch origin && git tag -a m07-done -m "M7 controllers accepted" 7771a38 && git push origin m07-done` (7771a38 is in "Where I stopped"). |
 | O16 | M7 | Rust controllers build and run on a real machine | `rustup target add wasm32-wasip1`, then `cargo run -p axl-app --release -- --code m01 --code-lang rust --code-run`. The log should show `cargo build` then `Program started.`; CI runs the same build in `cargo test` with `AXL_REQUIRE_TOOLCHAINS=1`. Also look at the Code screen on a real GPU (`docs/screenshots/m7-code-c.png`). |
 
 ## Development notes
