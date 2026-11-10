@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M7 Controllers is accepted and merged into `main` (merge commit 7771a38); the next milestone is M8 (not started). Open items: owner checks O8, O13 to O16 (tags `m03-done`, `m05-done`, `m06-done`, `m07-done` still need pushing), and the low-priority render follow-up from the owner's laptop run: GPU `uniform_allocation` and `bin_unpacking` grew on Low after the bindless mask; check whether they scale with the number of distinct materials and, if so, reduce per-part roughness/brightness variation levels on Low (record before and after under llvmpipe).
+M7 Controllers is accepted and merged into `main` (merge commit 7771a38); the next milestone is M8 (not started). Open items: owner check O16, and the low-priority render follow-up from the owner's laptop run: GPU `uniform_allocation` and `bin_unpacking` grew on Low after the bindless mask; check whether they scale with the number of distinct materials and, if so, reduce per-part roughness/brightness variation levels on Low (record before and after under llvmpipe).
 
 ## Owner checks
 
@@ -34,16 +34,16 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | O6 | M2 | Approve the look | Open `docs/screenshots/lookdev-high-1920x1080.png`, then on a real GPU run `cargo run -p axl-app --release -- --lookdev` and compare. Optional: swap the procedural studio cubemap for a Poly Haven HDRI (see decision 0005). |
 | O2 | M0 | The window opens on a real GPU | On a desktop machine: `cargo xtask fetch-mujoco && cargo run -p axl-app --release`. A dark window titled "AXL" with a status bar reading "AXL 0.1.0" should open and close normally. |
 | O7 | M3 | Approve the M3 look on a real GPU | Open `docs/screenshots/m3-lookdev-after-realism-high-1920x1080.png` and the two 1280x720 "after" images next to the "before" images, then on a real GPU run `cargo run -p axl-app --release -- --lookdev --quality high` and compare. Look for: softbox reflections on the red brick top and sides, highlights on bevels and stud rims, firm grounding. Known problem: SSAO noise (decision 0007). Also try `--parts all` and click a part. |
-| O8 | M3 | Push the `m03-done` tag (sandbox push refused) | `git fetch origin && git tag -a m03-done -m "M3 parts accepted" <merge commit on main> && git push origin m03-done`. `da393ab` is the M3 merge commit on `main`. |
+| O8 | M3 | Push the `m03-done` tag (sandbox push refused) | Done by the owner. |
 | O9 | M3 | Add a Poly Haven studio HDRI (optional, recommended) | 1. Open https://polyhaven.com/hdris/studio and pick a neutral indoor studio HDRI (CC0, for example "Studio Small 08"). 2. Download the 2K `.hdr` file. 3. Save it as `assets/render/studio.hdr` in the repository (it is loaded at start-up if present; a file that fails to load falls back to the procedural studio and logs why). 4. Run `cargo run -p axl-app --release -- --lookdev` and compare. 5. Commit the file only if the licence note is added to `assets/render/README`-style text in the commit message (CC0 needs no attribution). |
 
 | O10 | M4 | Build a robot in the UI on a real GPU | `cargo run -p axl-app --release -- --builder`. 1. Pick "Plate 8x16" in the palette (type `plate_8x16` in the search box), click on the floor. 2. Pick the hub, click on the plate. 3. Pick "Medium motor", press `R` twice and `U`, hover the plate near a side, click (the motor hangs under the plate). 4. Pick "Axle 3" and press `R` three times (right side), hover the motor's output end, click. 5. Pick "Wheel 56 mm", press `T`, hover the axle end, click. 6. Repeat mirrored on the other side (orbit with right-drag first). 7. Press Save, quit, start again and use Load. 8. Or load the Rover starter from the Load box and check the validation panel says "No problems found". Judge: is hanging parts with `U` understandable? Do the ghost, highlights and dots read well? |
 | O11 | M4 | Push the `m04-done` tag | Done by the owner. |
 | O12 | M5 | Sandbox looks right on a real GPU | `cargo run -p axl-app --release -- --sandbox rover --volts left=4,right=4`. The Rover should drive forward in a straight line with wheels turning and the caster rolling. Try `left=4,right=2` for a curve and `left=4,right=-4` for a spin. |
-| O13 | M5 | Push the `m05-done` tag (sandbox push refused) | `git fetch origin && git tag -a m05-done -m "M5 compiler accepted" 02da742 && git push origin m05-done` (02da742 is the M5 merge commit named in Where I stopped). |
+| O13 | M5 | Push the `m05-done` tag (sandbox push refused) | Done by the owner. |
 
-| O14 | M6 | Push the `m06-done` tag (sandbox push refused) | `git fetch origin && git tag -a m06-done -m "M6 hardware accepted" 7143c58 && git push origin m06-done` (7143c58 is the M6 merge commit). |
-| O15 | M7 | Push the `m07-done` tag (sandbox push refused) | `git fetch origin && git tag -a m07-done -m "M7 controllers accepted" 7771a38 && git push origin m07-done` (7771a38 is in "Where I stopped"). |
+| O14 | M6 | Push the `m06-done` tag (sandbox push refused) | Done by the owner. |
+| O15 | M7 | Push the `m07-done` tag (sandbox push refused) | Done by the owner. |
 | O16 | M7 | Rust controllers build and run on a real machine | `rustup target add wasm32-wasip1`, then `cargo run -p axl-app --release -- --code m01 --code-lang rust --code-run`. The log should show `cargo build` then `Program started.`; CI runs the same build in `cargo test` with `AXL_REQUIRE_TOOLCHAINS=1`. Also look at the Code screen on a real GPU (`docs/screenshots/m7-code-c.png`). |
 
 ## Development notes

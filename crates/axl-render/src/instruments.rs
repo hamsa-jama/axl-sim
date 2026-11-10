@@ -204,6 +204,8 @@ pub struct LiveView {
     pub selected: Option<usize>,
     /// The hinge under the cursor (index into `joints`).
     pub hover_joint: Option<usize>,
+    /// The mouse spring while dragging: (grab point, cursor target).
+    pub drag: Option<([f64; 3], [f64; 3])>,
 }
 
 /// The paths and drawings of a run.
@@ -644,6 +646,10 @@ fn draw_overlays(
     }
     if overlays.xray {
         draw_xray_joints(&mut g, &view);
+    }
+    if let Some((a, b)) = view.drag {
+        g.line(v3(a), v3(b), Color::srgb(1.0, 0.9, 0.2));
+        g.sphere(Isometry3d::from_translation(v3(b)), 0.004, Color::srgb(1.0, 0.9, 0.2));
     }
     // The selected body and the hovered hinge are always marked.
     if let Some(b) = view.selected.and_then(|i| view.bodies.get(i)) {
