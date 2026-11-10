@@ -1,0 +1,83 @@
+name: release
+
+# A tag such as v1.0.0 builds one package per OS and attaches them, with the accuracy report, to a
+# GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux system packages for Bevy
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+      - name: Install Rust
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup show
+
+      - name: Restore the Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Fetch MuJoCo
+        run: cargo xtask fetch-mujoco
+
+      - name: Point Cargo at MuJoCo
+        shell: bash
+        run: cargo xtask mujoco-env >> "$GITHUB_ENV"
+
+      - name: Accuracy suite (the report ships with the release)
+        run: cargo xtask validate
+
+      - name: Package
+        run: cargo xtask package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}
+          path: |
+            target/package/*.zip
+            target/package/*.tar.gz
+            target/package/*.dmg
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-${{ matrix.os }}
+          path: target/validation/
+
+  publish:
+    name: publish the release
+    needs: package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/package-*/*
+            dist/validation-report-ubuntu-24.04/report.md
+            dist/validation-report-ubuntu-24.04/report.json
+          generate_release_notes: true

@@ -86,3 +86,22 @@ panels; the overlays themselves are gizmos in `axl_render::instruments`, convert
 `axl_to_bevy`. The Code screen and `--sandbox` use the same instruments. Choices: decision 0014.
 Try it: `axl --sandbox rover --volts left=2,right=2` (keys 1 to 7, Space, `.`, `[`, `]`, Ctrl+R, drag
 with the left button).
+
+## After M9
+
+Missions are RON files in `assets/missions/` (`axl-missions::def`), registered in `library.rs`.
+`axl-sim::mission` builds a world and the robot for one mission and seed (`setup`), samples every
+10 ms into a `RunTrace` (`Recorder`), runs a controller unpaced (`run_seed`) and grades the traces
+of all grading seeds (`grade_mission`, the criteria are in `axl_missions::eval`). The headless
+command `axl --headless --mission mNN --controller robot.wasm --seed N [--all-seeds] [--robot
+file.axlbot]` prints the result as JSON and exits 0 on a pass, 1 on a fail and 2 on a setup error.
+Learning design lives in `axl-missions` without any UI: `learn::fsrs` (FSRS-4.5 cards),
+`learn::warmup` (question generators with numbers drawn from a seed, due cards picked per
+mission), `progress` (`progress.ron`: stars, failed runs, hints opened, prediction, cards; atomic
+write with a `.bak`) and `results` (rows per criterion, metrics, the verdict on the prediction, the
+brief as blocks). `axl-app::mission_ui` draws it next to the Code screen: brief, warm-ups,
+prediction, hints and the Results screen with a replay of the recorded path; the Code screen hands
+a built program over (`CodeScreen::request_submit`) and a thread grades it. Reference solutions:
+`missions/solutions/{c,rust}/mNN`, the m12 design `missions/solutions/m12.axlbot`; templates:
+`templates/{c,rust}/mNN`. `cargo xtask sdk-check` builds all of them and grades them headless
+(templates must not pass, solutions must). Choices: decision 0015.
