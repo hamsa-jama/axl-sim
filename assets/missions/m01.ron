@@ -13,7 +13,7 @@
 ## Get the Rover to the 1 m line
 
 The test track has a mark every 100 mm. Drive the Rover forward and stop it so that the **front of
-the Rover** (the edge of its plate, about 32 mm in front of the hub) ends between the 950 mm and the
+the Rover** (the front of its wheels, 48 mm in front of the hub) ends between the 950 mm and the
 1050 mm marks.
 
 You have **10 seconds**. A robot that is still rolling when the time is up does not count.

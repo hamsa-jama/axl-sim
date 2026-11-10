@@ -21,6 +21,9 @@ pub struct Sample {
     pub ahead_m: f64,
     /// A robot geom touches a wall now.
     pub wall_contact: bool,
+    /// The point midway between the drive wheels (the centre a robot turns about), metres. The
+    /// hub is not always above the axle, so turning on the spot moves the hub but not this point.
+    pub pivot: [f64; 2],
 }
 
 /// Everything a run records.

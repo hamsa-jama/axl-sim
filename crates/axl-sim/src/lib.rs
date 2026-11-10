@@ -211,6 +211,10 @@ pub enum Command {
     Stop,
 }
 
+/// How far in front of the robot's centre of mass a mission push lands, metres (someone pushes the
+/// nose; the number is a design choice, decision 0015).
+pub const PUSH_ARM_M: f64 = 0.05;
+
 /// A push on the robot at a simulated time: an impulse delivered over one tick (a mission event).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Push {
@@ -375,15 +379,23 @@ impl SimCore {
         !self.physics.warnings().is_unstable()
     }
 
-    /// A push is a force of `impulse / 1 ms` on the root body's centre of mass during one tick.
+    /// A push is a force of `impulse / 1 ms` during one tick, landing [`PUSH_ARM_M`] in front of
+    /// the root body's centre of mass, so a sideways push also turns the robot.
     fn apply_pushes(&mut self) {
         let ms = (self.physics.time() * 1000.0).round() as u64;
         for p in &self.pushes {
             let start = (p.t * 1000.0).round() as u64;
             if ms == start {
+                let pose = self.physics.body_pose(self.root);
                 let com = self.physics.body_com(self.root);
+                let yaw = crate::mission::yaw_of(pose.quat);
+                let at = [
+                    com[0] + PUSH_ARM_M * yaw.cos(),
+                    com[1] + PUSH_ARM_M * yaw.sin(),
+                    com[2],
+                ];
                 let f = p.impulse_ns.map(|i| i / self.physics.timestep());
-                self.physics.apply_force(self.root, com, f);
+                self.physics.apply_force(self.root, at, f);
             } else if ms == start + 1 {
                 self.physics.clear_applied_forces();
             }

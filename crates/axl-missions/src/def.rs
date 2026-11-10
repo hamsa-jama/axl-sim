@@ -108,8 +108,8 @@ pub enum Criterion {
         /// Seconds.
         within_s: f64,
     },
-    /// The final unwrapped yaw is `yaw` within `tol_rad`, and the final position is within
-    /// `drift_m` of the start.
+    /// The final unwrapped yaw is `yaw` within `tol_rad`, and the point midway between the drive
+    /// wheels is within `drift_m` of where it started.
     TurnTo {
         /// Radians (a turn of 90 degrees then 180 degrees is 3 pi / 2).
         yaw: f64,

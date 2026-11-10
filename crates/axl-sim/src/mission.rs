@@ -28,6 +28,8 @@ pub use crate::program::ProgramConfig;
 
 /// Simulated seconds between trace samples.
 pub const SAMPLE_INTERVAL_MS: u64 = 10;
+/// Wheel speed of the runner's own measuring drives, rad/s: slow enough that the tyres do not slip.
+const GENTLE_RAD_S: f64 = 3.0;
 /// Height above the floor of the ray that measures the distance ahead, metres (mid-height of the
 /// 100 mm walls and obstacles).
 const AHEAD_RAY_Z_M: f64 = 0.04;
@@ -63,6 +65,8 @@ pub struct MissionSetup {
     pub robot_bodies: Vec<usize>,
     /// Parts in the robot.
     pub part_count: u16,
+    /// Hinge joints of the drive motors (their bodies give the point the robot turns about).
+    pub pivot_joints: Vec<String>,
     /// Spawn pose.
     pub spawn: axl_world::Pose2,
 }
@@ -113,12 +117,26 @@ pub fn setup(
     })?;
     let built = build_world(def, m.world.variant_for(seed), seed, &objects, &friction())
         .map_err(MissionRunError::World)?;
+    // The robot frame's origin is the hub, which need not be where the learner put the origin of
+    // the design: the spawn point is where the hub goes.
+    let hub = asm
+        .parts
+        .iter()
+        .find(|p| p.part.0 == "hub")
+        .map_or([0.0, 0.0], |p| {
+            // Placement is in 0.1 mm steps.
+            [f64::from(p.pos[0]) * 1e-4, f64::from(p.pos[1]) * 1e-4]
+        });
+    let (sy, cy) = built.spawn.yaw.sin_cos();
     let compiled = compile(
         cat,
         asm,
         &PhysicsParams::builtin(),
         &CompileOptions {
-            spawn_xy: [built.spawn.x, built.spawn.y],
+            spawn_xy: [
+                built.spawn.x - (cy * hub[0] - sy * hub[1]),
+                built.spawn.y - (sy * hub[0] + cy * hub[1]),
+            ],
             spawn_yaw: built.spawn.yaw,
             extra_worldbody: built.worldbody.clone(),
         },
@@ -142,10 +160,24 @@ pub fn setup(
         })
         .collect();
     let robot_bodies = compiled.bodies.bodies.iter().map(|b| b.id).collect();
+    let pivot_joints = compiled
+        .devices
+        .devices
+        .iter()
+        .filter(|d| {
+            matches!(
+                d.kind,
+                axl_parts::types::DeviceModel::MotorMedium
+                    | axl_parts::types::DeviceModel::MotorLarge
+            )
+        })
+        .filter_map(|d| d.joint.as_ref().map(|j| j.name.clone()))
+        .collect();
     let mut walls = built.wall_geoms.clone();
     walls.extend(built.obstacle_geoms.iter().cloned());
     Ok(MissionSetup {
         robot_bodies,
+        pivot_joints,
         walls,
         part_count: u16::try_from(asm.parts.len()).unwrap_or(u16::MAX),
         eval: EvalContext {
@@ -178,12 +210,14 @@ impl MissionSetup {
 
     /// The recorder for this setup.
     pub fn recorder(&self) -> Recorder {
-        Recorder::new(
+        let mut r = Recorder::new(
             self.seed(),
             self.part_count,
             &self.walls,
             self.robot_bodies.clone(),
-        )
+        );
+        r.pivot_joints = self.pivot_joints.clone();
+        r
     }
 
     /// The run seed.
@@ -192,7 +226,7 @@ impl MissionSetup {
     }
 }
 
-fn yaw_of(q: [f64; 4]) -> f64 {
+pub(crate) fn yaw_of(q: [f64; 4]) -> f64 {
     (2.0 * (q[0] * q[3] + q[1] * q[2])).atan2(1.0 - 2.0 * (q[2] * q[2] + q[3] * q[3]))
 }
 
@@ -204,6 +238,8 @@ pub struct Recorder {
     wall_names: Vec<String>,
     walls: Vec<GeomId>,
     robot_bodies: Vec<usize>,
+    pivot_joints: Vec<String>,
+    pivot_bodies: Vec<usize>,
     root: usize,
     front_off: f64,
     next_ms: u64,
@@ -240,6 +276,13 @@ impl Recorder {
     /// found with rays shot back at the robot along its heading).
     pub fn start(&mut self, core: &mut SimCore) {
         self.root = core.root_body().0;
+        self.pivot_bodies = self
+            .pivot_joints
+            .iter()
+            .filter_map(|n| core.physics().joint_id(n).ok())
+            .filter_map(|j| core.physics().joint_body(j))
+            .map(|b| b.0)
+            .collect();
         self.walls = self
             .wall_names
             .iter()
@@ -326,6 +369,16 @@ impl Recorder {
         let up_z = 1.0 - 2.0 * (q[1] * q[1] + q[2] * q[2]);
         let v = physics.body_linear_velocity(BodyId(self.root));
         let (s, c) = raw.sin_cos();
+        let pivot = if self.pivot_bodies.is_empty() {
+            [pose.pos[0], pose.pos[1]]
+        } else {
+            let n = self.pivot_bodies.len() as f64;
+            let sum = self.pivot_bodies.iter().fold([0.0, 0.0], |a, &b| {
+                let p = physics.body_pose(BodyId(b)).pos;
+                [a[0] + p[0], a[1] + p[1]]
+            });
+            [sum[0] / n, sum[1] / n]
+        };
         let front = [
             pose.pos[0] + c * self.front_off,
             pose.pos[1] + s * self.front_off,
@@ -347,6 +400,7 @@ impl Recorder {
             front,
             ahead_m,
             wall_contact: std::mem::take(&mut self.wall_hit),
+            pivot,
         });
     }
 
@@ -489,10 +543,10 @@ pub fn measure(
             let p0 = core.physics().body_pose(core.root_body()).pos;
             let go = MotorCommand::Position {
                 target: turn,
-                max_speed: 10.0,
+                max_speed: GENTLE_RAD_S,
             };
             drive(&mut core, go, go);
-            run_secs(&mut core, 3.0);
+            run_secs(&mut core, 4.0);
             Some(travelled(&core, p0) * 1000.0)
         }
         "spin_one_turn_deg" => {
@@ -501,14 +555,14 @@ pub fn measure(
                 &mut core,
                 MotorCommand::Position {
                     target: turn,
-                    max_speed: 10.0,
+                    max_speed: GENTLE_RAD_S,
                 },
                 MotorCommand::Position {
                     target: -turn,
-                    max_speed: 10.0,
+                    max_speed: GENTLE_RAD_S,
                 },
             );
-            run_secs(&mut core, 3.0);
+            run_secs(&mut core, 4.0);
             let y1 = yaw_of(core.physics().body_pose(core.root_body()).quat);
             let d = (y1 - y0 + std::f64::consts::PI).rem_euclid(turn) - std::f64::consts::PI;
             Some(d.abs().to_degrees())

@@ -99,11 +99,28 @@ pub fn result_json(id: &str, run: &GradedRun) -> String {
                 json_str(&c.message)
             );
         }
+        s.push_str("], \"measured\": {");
+        for (j, (k, v)) in t.measured.iter().enumerate() {
+            if j > 0 {
+                s.push_str(", ");
+            }
+            let _ = write!(s, "{}: {v:.4}", json_str(k));
+        }
+        s.push_str("}, \"log\": [");
+        for (j, line) in run.logs.iter().take(MAX_LOG_LINES).enumerate() {
+            if j > 0 {
+                s.push_str(", ");
+            }
+            s.push_str(&json_str(line));
+        }
         s.push_str("]}");
     }
     s.push_str("]}");
     s
 }
+
+/// Lines of program output kept per seed in the JSON.
+const MAX_LOG_LINES: usize = 200;
 
 fn json_str(text: &str) -> String {
     let mut out = String::from("\"");

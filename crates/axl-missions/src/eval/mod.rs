@@ -226,13 +226,13 @@ pub fn check(c: &Criterion, ctx: &EvalContext, t: &RunTrace) -> CriterionResult 
         } => {
             let turned = last.yaw - first.yaw;
             let err = (turned - yaw).abs();
-            let drift = dist(xy(last), xy(first));
+            let drift = dist(last.pivot, first.pivot);
             let ok = err <= *tol_rad && drift <= *drift_m && last.speed < STOPPED_MS;
             res(
                 "turn",
                 ok,
                 format!(
-                    "Turned {} in total, {} from the target {} (allowed {}); drifted {} (allowed {}).",
+                    "Turned {} in total, {} from the target {} (allowed {}); the point between the wheels drifted {} (allowed {}).",
                     deg(turned),
                     deg(err),
                     deg(*yaw),

@@ -79,16 +79,22 @@ fn on_port(mut s: Step, port: Port) -> Step {
     s
 }
 
+/// Where the hub is aimed at on the Rover's plate, mm.
+const HUB_X: f64 = -16.0;
+
 /// The Rover recipe: two medium motors, two 56 mm wheels, a caster, an ultrasonic sensor and a
 /// colour sensor, on an 8x16 plate under a hub. The motors, caster and colour sensor hang under
 /// the plate; the wheels sit outside it on 3-unit axles.
 pub fn rover_steps() -> Vec<Step> {
     vec![
         step("plate_8x16", "dark_grey", "", Aim::Down(0.0, 0.0)),
-        named(step("hub", "white", "", Aim::Down(0.0, 0.0)), "hub"),
+        // The hub sits one stud behind the middle of the plate. It is by far the heaviest part, so
+        // this puts the centre of mass behind the axle and the Rover does not tip over its wheels
+        // when it brakes (decision 0015).
+        named(step("hub", "white", "", Aim::Down(HUB_X, 0.0)), "hub"),
         on_port(
             named(
-                step("sensor_ultrasonic", "black", "", Aim::Down(24.0, 0.0)),
+                step("sensor_ultrasonic", "black", "", Aim::Down(24.0 + HUB_X, 0.0)),
                 "eye",
             ),
             Port::C,
@@ -152,7 +158,7 @@ pub fn rover_tof_steps() -> Vec<Step> {
 }
 
 /// Where the time-of-flight sensor of [`rover_tof_steps`] is aimed at, mm.
-const TOF_X: f64 = -8.0;
+const TOF_X: f64 = HUB_X - 8.0;
 const TOF_Y: f64 = 0.0;
 
 /// The Test chassis recipe: a hub on a plate, no other devices.
