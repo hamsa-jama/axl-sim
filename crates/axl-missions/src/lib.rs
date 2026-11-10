@@ -13,6 +13,7 @@ pub mod eval;
 pub mod learn;
 pub mod library;
 pub mod progress;
+pub mod results;
 pub mod trace;
 
 pub use def::{

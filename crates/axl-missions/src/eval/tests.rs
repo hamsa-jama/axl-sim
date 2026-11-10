@@ -323,7 +323,7 @@ fn turn_to_needs_the_angle_and_a_still_pivot() {
     let under = path(&[(0.0, 0.0, 0.0, 0.0), (2.0, 0.0, 0.0, 2.9)]);
     assert!(!check(&c, &ctx(), &under).ok);
     // Right angle, but the robot swung wide.
-    let wide = path(&[(0.0, 0.0, 0.0, 0.0), (2.0, 0.2, 0.0, 3.14)]);
+    let wide = path(&[(0.0, 0.0, 0.0, 0.0), (2.0, 0.2, 0.0, 3.13)]);
     let r = check(&c, &ctx(), &wide);
     assert!(!r.ok && r.message.contains("drifted"), "{}", r.message);
     // Still turning at the end.
