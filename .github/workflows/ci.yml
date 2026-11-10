@@ -66,6 +66,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Headless build (no window, no renderer)
+        run: cargo clippy -p axl-app --no-default-features --all-targets -- -D warnings
+
       - name: Test
         run: cargo test --workspace
 

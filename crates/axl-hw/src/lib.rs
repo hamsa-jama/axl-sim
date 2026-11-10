@@ -33,7 +33,8 @@ pub use motor::{Encoder, Motor, MotorCommand, MotorKind};
 pub use noise::Noise;
 pub use params::HwParams;
 pub use sensors::{
-    ColorName, ColorReading, ColorSensor, FloorMat, Imu, TimeOfFlight, TouchSensor, Ultrasonic,
+    ColorName, ColorReading, ColorSensor, FloorMat, Imu, MAX_VISUAL_RAYS, SensorVisual,
+    TimeOfFlight, TouchSensor, Ultrasonic, VisualKind,
 };
 
 /// What a device is, for handle checks ("device 3 (eye) is a distance sensor, not a motor").
@@ -367,6 +368,75 @@ impl Hardware {
             Slot::Ultrasonic(i) => self.ultrasonics.get(i).map(|s| s.distance(self.now_ms)),
             Slot::Tof(i) => self.tofs.get(i).map(|s| s.distance(self.now_ms)),
             _ => None,
+        }
+    }
+
+    /// The overlay pictures of every distance and colour sensor now. Reuses `out` (cleared first);
+    /// after the first call it does not allocate.
+    pub fn sensor_visuals(&self, physics: &mut Physics, out: &mut Vec<SensorVisual>) {
+        out.clear();
+        let now = self.now_ms;
+        for (i, d) in self.devices.iter().enumerate() {
+            let v = match d.slot {
+                Slot::Ultrasonic(k) => self
+                    .ultrasonics
+                    .get(k)
+                    .and_then(|s| s.visual(i, physics, now)),
+                Slot::Tof(k) => self.tofs.get(k).and_then(|s| s.visual(i, physics, now)),
+                Slot::Color(k) => self.colors.get(k).and_then(|s| s.visual(i, physics, now)),
+                _ => None,
+            };
+            out.extend(v);
+        }
+    }
+
+    /// Names of the built-in plot channels this hardware provides, in the order of
+    /// [`Hardware::channel_values`]: each motor's angle, speed and current, the battery voltage,
+    /// and each sensor's reading.
+    pub fn channel_names(&self) -> Vec<String> {
+        let mut v = Vec::new();
+        for m in &self.motors {
+            v.push(format!("{} angle (rad)", m.name()));
+            v.push(format!("{} speed (rad/s)", m.name()));
+            v.push(format!("{} current (A)", m.name()));
+        }
+        v.push("battery (V)".to_owned());
+        for d in &self.devices {
+            match d.slot {
+                Slot::Ultrasonic(_) | Slot::Tof(_) => v.push(format!("{} distance (m)", d.name)),
+                Slot::Color(_) => v.push(format!("{} reflect (%)", d.name)),
+                Slot::Touch(_) => v.push(format!("{} force (N)", d.name)),
+                _ => {}
+            }
+        }
+        v
+    }
+
+    /// The values of the channels in [`Hardware::channel_names`] now (controller-visible readings).
+    /// Reuses `out` (cleared first).
+    pub fn channel_values(&self, out: &mut Vec<f64>) {
+        out.clear();
+        for m in &self.motors {
+            out.push(m.angle());
+            out.push(m.rate());
+            out.push(m.current());
+        }
+        out.push(self.battery.voltage());
+        let now = self.now_ms;
+        for d in &self.devices {
+            match d.slot {
+                Slot::Ultrasonic(k) => {
+                    out.push(self.ultrasonics.get(k).map_or(-1.0, |s| s.distance(now)))
+                }
+                Slot::Tof(k) => out.push(self.tofs.get(k).map_or(-1.0, |s| s.distance(now))),
+                Slot::Color(k) => {
+                    out.push(self.colors.get(k).map_or(0.0, |s| s.reading(now).reflect))
+                }
+                Slot::Touch(k) => {
+                    out.push(self.touches.get(k).map_or(0.0, |s| s.force_reading(now)))
+                }
+                _ => {}
+            }
         }
     }
 

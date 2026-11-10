@@ -407,6 +407,7 @@ impl Physics {
                 normal_force: f[0],
                 friction_force: [f[1], f[2]],
                 dist: c.dist,
+                friction_coef: c.friction[0],
                 geom1: GeomId(c.geom1 as usize),
                 geom2: GeomId(c.geom2 as usize),
             });
@@ -436,6 +437,48 @@ impl Physics {
         for x in self.data.xfrc_applied_mut().iter_mut() {
             *x = [0.0; 6];
         }
+    }
+
+    // ----- joint geometry and loads (instruments) ----------------------------
+
+    /// True for a free joint (the robot's root), which has no single angle.
+    pub fn joint_is_free(&self, j: JointId) -> bool {
+        self.data
+            .model()
+            .jnt_type()
+            .get(j.0)
+            .is_none_or(|t| *t == MjtJoint::mjJNT_FREE)
+    }
+
+    /// The body a joint moves (its child body). `None` for a bad id.
+    pub fn joint_body(&self, j: JointId) -> Option<BodyId> {
+        self.data
+            .model()
+            .jnt_bodyid()
+            .get(j.0)
+            .map(|&b| BodyId(b as usize))
+    }
+
+    /// World position of a joint's anchor and its unit axis. Zeros for a bad id. Valid after
+    /// `step` or `forward`.
+    pub fn joint_anchor_axis(&self, j: JointId) -> ([f64; 3], [f64; 3]) {
+        let a = self.data.xanchor().get(j.0).copied().unwrap_or([0.0; 3]);
+        let x = self.data.xaxis().get(j.0).copied().unwrap_or([0.0; 3]);
+        (a, x)
+    }
+
+    /// The torque (N m) acting along a joint's axis from its actuator, its damping and spring,
+    /// and the constraints on it (friction loss, limits, loop closures). Gravity and inertia are
+    /// not included. Valid after `forward`. Zero for a bad id.
+    pub fn joint_torque(&self, j: JointId) -> f64 {
+        let Some(&adr) = self.data.model().jnt_dofadr().get(j.0) else {
+            return 0.0;
+        };
+        let adr = adr as usize;
+        let at = |v: &[f64]| v.get(adr).copied().unwrap_or(0.0);
+        at(self.data.qfrc_actuator())
+            + at(self.data.qfrc_passive())
+            + at(self.data.qfrc_constraint())
     }
 
     // ----- warnings ---------------------------------------------------------
@@ -1031,6 +1074,35 @@ mod tests {
             p.step();
         }
         assert!((p.qpos()[0] - 0.02).abs() < 1e-3);
+    }
+
+    #[test]
+    fn joint_geometry_and_torque() {
+        let mut p = scene();
+        let hinge = p.joint_id("hinge").unwrap();
+        let free = p.joint_id("ball_free").unwrap();
+        assert!(p.joint_is_free(free));
+        assert!(!p.joint_is_free(hinge));
+        assert!(p.joint_is_free(JointId(99)));
+        assert_eq!(p.joint_body(hinge), Some(p.body_id("arm").unwrap()));
+        assert_eq!(p.joint_body(JointId(99)), None);
+        p.forward();
+        let (anchor, axis) = p.joint_anchor_axis(hinge);
+        assert_relative_eq!(anchor[1], -0.5, epsilon = 1e-12);
+        assert_relative_eq!(anchor[2], 1.0, epsilon = 1e-12);
+        assert_relative_eq!(axis[1], 1.0, epsilon = 1e-12);
+        assert_eq!(p.joint_anchor_axis(JointId(99)), ([0.0; 3], [0.0; 3]));
+        // A driven hinge: the actuator torque shows up in the joint torque.
+        p.set_ctrl(p.actuator_id("motor").unwrap(), 4.0);
+        p.forward();
+        let t = p.joint_torque(hinge);
+        assert!(t > 0.0, "torque {t}");
+        assert_relative_eq!(
+            t,
+            p.actuator_force(p.actuator_id("motor").unwrap()),
+            epsilon = 0.01
+        );
+        assert_eq!(p.joint_torque(JointId(99)), 0.0);
     }
 
     #[test]

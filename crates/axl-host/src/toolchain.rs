@@ -53,6 +53,21 @@ impl ToolchainStatus {
     /// `~/wasi-sdk`, `C:\wasi-sdk` (and `third_party/wasi-sdk` next to the working directory, for
     /// development).
     pub fn detect() -> Self {
+        Self::detect_in(None)
+    }
+
+    /// Like [`detect`](Self::detect), but the Rust checks run inside `project` (when it exists),
+    /// where a `rust-toolchain.toml` or a missing default toolchain is seen exactly as a build
+    /// would see it.
+    pub fn detect_in(project: Option<&Path>) -> Self {
+        let dir = project.filter(|p| p.is_dir());
+        let in_dir = |prog: &str| {
+            let mut c = Command::new(prog);
+            if let Some(d) = dir {
+                c.current_dir(d);
+            }
+            c
+        };
         let runs = |prog: &str| {
             Command::new(prog)
                 .arg("--version")
@@ -61,7 +76,7 @@ impl ToolchainStatus {
                 .status()
                 .is_ok_and(|s| s.success())
         };
-        let rust_target = Command::new("rustc")
+        let rust_target = in_dir("rustc")
             .args(["--print", "sysroot"])
             .output()
             .ok()
@@ -75,7 +90,12 @@ impl ToolchainStatus {
             });
         Self {
             rustup: runs("rustup"),
-            cargo: runs("cargo"),
+            cargo: in_dir("cargo")
+                .arg("--version")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success()),
             rust_target,
             wasi_sdk: find_wasi_sdk(),
         }
@@ -109,7 +129,9 @@ impl ToolchainStatus {
                         "Install Rust from https://rustup.rs (it also installs rustup).".to_owned(),
                     );
                 }
-                if !self.rust_target {
+                if self.rustup && !self.cargo {
+                    v.push("Run: rustup default stable   (no default Rust is set up)".to_owned());
+                } else if !self.rust_target {
                     v.push(format!("Run: rustup target add {RUST_TARGET}"));
                 }
             }
@@ -342,6 +364,9 @@ pub struct BuildRequest {
     pub sdk: PathBuf,
     /// wasi-sdk folder (C only); `None` finds it with [`find_wasi_sdk`].
     pub wasi_sdk: Option<PathBuf>,
+    /// Environment variables the build's child processes must not inherit (the tests drop
+    /// `RUSTUP_TOOLCHAIN` to build like a learner whose shell sets nothing).
+    pub env_remove: Vec<String>,
 }
 
 /// The result of a build.
@@ -442,6 +467,9 @@ pub fn build(req: &BuildRequest, mut log: impl FnMut(&str)) -> BuildOutcome {
         }
         Lang::Rust => {
             let mut cmd = Command::new("cargo");
+            for k in &req.env_remove {
+                cmd.env_remove(k);
+            }
             cmd.args([
                 "build",
                 "--target",
@@ -588,6 +616,9 @@ fn copy_missing(src: &Path, dest: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dest)?;
     for e in std::fs::read_dir(src)? {
         let e = e?;
+        if e.file_name() == "target" {
+            continue;
+        }
         let to = dest.join(e.file_name());
         if e.file_type()?.is_dir() {
             copy_missing(&e.path(), &to)?;
@@ -601,6 +632,31 @@ fn copy_missing(src: &Path, dest: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_default_toolchain_says_how_to_fix_it() {
+        let s = ToolchainStatus {
+            rustup: true,
+            cargo: false,
+            rust_target: false,
+            wasi_sdk: None,
+        };
+        assert!(!s.rust_ready());
+        assert_eq!(
+            s.install_steps(Lang::Rust),
+            vec!["Run: rustup default stable   (no default Rust is set up)".to_owned()]
+        );
+    }
+
+    #[test]
+    fn the_rust_template_pins_a_toolchain_with_the_wasm_target() {
+        let t = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../templates/rust/m01/rust-toolchain.toml"),
+        )
+        .unwrap();
+        assert!(t.contains("channel = \"stable\"") && t.contains(RUST_TARGET));
+    }
 
     #[test]
     fn clang_lines_become_diagnostics() {

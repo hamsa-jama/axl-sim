@@ -647,3 +647,168 @@ impl Imu {
             .map_or([0.0; 3], |s| [s.v[0], s.v[1], s.v[2]])
     }
 }
+
+// ----- what the sensors overlay draws ---------------------------------------------------------
+
+/// The most rays a distance sensor casts (the ultrasonic's centre ray plus two rings of six).
+pub const MAX_VISUAL_RAYS: usize = 13;
+
+/// Which sensor a [`SensorVisual`] describes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VisualKind {
+    /// Ultrasonic: a cone.
+    Ultrasonic,
+    /// Time of flight: a narrow bundle of rays.
+    Tof,
+    /// Colour: a spot on the surface below.
+    Color,
+}
+
+/// One sensor as the sensors overlay shows it: where it looks, its cone, every ray's end point
+/// and the reading a controller sees now. A fixed-size value, so filling it never allocates.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SensorVisual {
+    /// Index of the device in [`crate::Hardware::devices`].
+    pub device: usize,
+    /// Sensor type.
+    pub kind: VisualKind,
+    /// Sensor position, world frame, metres.
+    pub origin: [f64; 3],
+    /// Unit view direction, world frame.
+    pub axis: [f64; 3],
+    /// Longest range, metres.
+    pub range_m: f64,
+    /// Half angle of the widest ray, degrees (0 for the colour sensor).
+    pub half_angle_deg: f64,
+    /// The reading a controller sees now: metres or -1 for distance sensors, reflectance 0 to 100
+    /// for the colour sensor.
+    pub reading: f64,
+    /// Colour sensor RGB (0 for the other kinds).
+    pub rgb: [i32; 3],
+    /// Colour sensor name.
+    pub color_name: ColorName,
+    /// How many of `ends` are used.
+    pub n_rays: usize,
+    /// End point of each ray: the hit point, or the end of the range when nothing was hit.
+    pub ends: [[f64; 3]; MAX_VISUAL_RAYS],
+    /// Whether each ray hit something that counts (in range and facing the sensor).
+    pub hit: [bool; MAX_VISUAL_RAYS],
+}
+
+impl SensorVisual {
+    fn blank(device: usize, kind: VisualKind, frame: ([f64; 3], [[f64; 3]; 3])) -> Self {
+        Self {
+            device,
+            kind,
+            origin: frame.0,
+            axis: frame.1[2],
+            range_m: 0.0,
+            half_angle_deg: 0.0,
+            reading: -1.0,
+            rgb: [0; 3],
+            color_name: ColorName::None,
+            n_rays: 0,
+            ends: [[0.0; 3]; MAX_VISUAL_RAYS],
+            hit: [false; MAX_VISUAL_RAYS],
+        }
+    }
+}
+
+fn cast_rays(
+    v: &mut SensorVisual,
+    physics: &mut Physics,
+    dirs: &[[f64; 3]],
+    axes: &[[f64; 3]; 3],
+    (min_m, max_m, min_cos): (f64, f64, f64),
+) {
+    for d in dirs.iter().take(MAX_VISUAL_RAYS) {
+        let dir = combine(axes, *d);
+        let i = v.n_rays;
+        v.n_rays += 1;
+        match physics.ray(v.origin, dir, GroupMask::WORLD_AND_OBJECTS) {
+            Some(h) => {
+                v.ends[i] = h.point;
+                v.hit[i] = h.distance >= min_m
+                    && h.distance <= max_m
+                    && -dot(h.normal, axes[2]) >= min_cos;
+            }
+            None => {
+                v.ends[i] = std::array::from_fn(|k| v.origin[k] + dir[k] * max_m);
+            }
+        }
+    }
+}
+
+impl Ultrasonic {
+    /// The overlay picture of this sensor now (casts its rays again; does not touch its samples).
+    pub fn visual(
+        &self,
+        device: usize,
+        physics: &mut Physics,
+        now_ms: u64,
+    ) -> Option<SensorVisual> {
+        let frame = physics.site_frame(self.site)?;
+        let mut v = SensorVisual::blank(device, VisualKind::Ultrasonic, frame);
+        v.range_m = self.p.max_m;
+        v.half_angle_deg = self.p.ring_deg.0.max(self.p.ring_deg.1);
+        v.reading = self.distance(now_ms);
+        cast_rays(
+            &mut v,
+            physics,
+            &self.dirs,
+            &frame.1,
+            (self.p.min_m, self.p.max_m, self.min_cos),
+        );
+        Some(v)
+    }
+}
+
+impl TimeOfFlight {
+    /// The overlay picture of this sensor now.
+    pub fn visual(
+        &self,
+        device: usize,
+        physics: &mut Physics,
+        now_ms: u64,
+    ) -> Option<SensorVisual> {
+        let frame = physics.site_frame(self.site)?;
+        let mut v = SensorVisual::blank(device, VisualKind::Tof, frame);
+        v.range_m = self.p.max_m;
+        v.half_angle_deg = self.p.ring_deg;
+        v.reading = self.distance(now_ms);
+        cast_rays(
+            &mut v,
+            physics,
+            &self.dirs,
+            &frame.1,
+            (self.p.min_m, self.p.max_m, self.min_cos),
+        );
+        Some(v)
+    }
+}
+
+impl ColorSensor {
+    /// The overlay picture of this sensor now: the centre ray and where the spot lands.
+    pub fn visual(
+        &self,
+        device: usize,
+        physics: &mut Physics,
+        now_ms: u64,
+    ) -> Option<SensorVisual> {
+        let frame = physics.site_frame(self.site)?;
+        let mut v = SensorVisual::blank(device, VisualKind::Color, frame);
+        v.range_m = self.p.max_m;
+        let r = self.reading(now_ms);
+        v.reading = r.reflect;
+        v.rgb = r.rgb;
+        v.color_name = r.name;
+        cast_rays(
+            &mut v,
+            physics,
+            &[[0.0, 0.0, 1.0]],
+            &frame.1,
+            (self.p.min_m, self.p.max_m, -1.0),
+        );
+        Some(v)
+    }
+}

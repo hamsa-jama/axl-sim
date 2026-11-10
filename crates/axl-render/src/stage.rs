@@ -153,7 +153,11 @@ impl Plugin for StagePlugin {
             ))
             .add_systems(
                 Update,
-                (crate::sync::sync_bodies, crate::scene::apply_micro_surface),
+                (
+                    crate::sync::sync_bodies,
+                    crate::scene::apply_micro_surface,
+                    sync_part_variation,
+                ),
             );
 
         match &opts.content {
@@ -166,7 +170,9 @@ impl Plugin for StagePlugin {
             StageContent::Builder => {
                 app.add_plugins(crate::builder_view::BuilderPlugin);
             }
-            StageContent::Sandbox => {}
+            StageContent::Sandbox => {
+                app.add_plugins(crate::instruments::InstrumentsPlugin);
+            }
             StageContent::Stress(n) => {
                 app.insert_resource(StressBoxes(*n));
                 app.add_systems(Update, stress_source);
@@ -236,6 +242,7 @@ fn setup_stage(
     }
 
     let mut parts = PartMaterials::new(&mut images);
+    parts.vary = quality.0.settings().part_variation;
     let mut home = CameraHome::default();
     let mut focus = None;
     {
@@ -251,7 +258,9 @@ fn setup_stage(
             focus = spawn_scene(&mut commands, root, &scene, &mut builder);
         }
         if let Some(sb) = sandbox {
-            home = crate::sim_view::spawn_sandbox(&mut commands, root, &sb, &mut builder);
+            let (h, f) = crate::sim_view::spawn_sandbox(&mut commands, root, &sb, &mut builder);
+            home = h;
+            focus = f;
         }
         if let Some(stress) = stress {
             home = CameraHome {
@@ -653,6 +662,16 @@ pub fn gpu_summary_lines(gpu: &[(String, f64)], frame_ms: f64) -> Vec<String> {
         out.push(format!("perf: gpu {v:6.2} ms  {p}"));
     }
     out
+}
+
+/// Parts made after a quality change use that preset's material variation (existing parts keep
+/// the materials they have).
+fn sync_part_variation(quality: Res<ActiveQuality>, parts: Option<ResMut<PartMaterials>>) {
+    if let Some(mut parts) = parts
+        && quality.is_changed()
+    {
+        parts.vary = quality.0.settings().part_variation;
+    }
 }
 
 #[cfg(test)]

@@ -11,7 +11,6 @@ use axl_host::HostConfig;
 use axl_parts::catalog::Catalog;
 use axl_render::bevy::prelude::*;
 use axl_render::sim_view::SandboxScene;
-use axl_render::sync::{BodyPose, RenderSnapshot, SnapshotBuffer};
 use axl_sim::{HwOptions, ProgramConfig, Sandbox};
 
 /// The running sim thread.
@@ -97,35 +96,6 @@ pub fn run_program(robot: &CodeRobot, wasm: Vec<u8>) -> Result<SandboxSim, Strin
     )
     .map(|s| SandboxSim(Mutex::new(s)))
     .map_err(|e| e.to_string())
-}
-
-/// Move the newest sim snapshot into the render buffer, once per new snapshot.
-pub fn pump(
-    sim: Res<SandboxSim>,
-    time: Res<Time<Real>>,
-    mut buf: ResMut<SnapshotBuffer>,
-    mut last: Local<f64>,
-) {
-    let Ok(mut sb) = sim.0.lock() else { return };
-    let s = sb.latest();
-    if s.bodies.is_empty() || s.time == *last {
-        return;
-    }
-    *last = s.time;
-    buf.push(
-        RenderSnapshot {
-            time: s.time,
-            bodies: s
-                .bodies
-                .iter()
-                .map(|p| BodyPose {
-                    pos: p.pos,
-                    quat: p.quat,
-                })
-                .collect(),
-        },
-        time.elapsed_secs_f64(),
-    );
 }
 
 #[cfg(test)]

@@ -233,6 +233,28 @@ mod tests {
     }
 
     #[test]
+    fn an_existing_data_folder_does_not_skip_the_benchmark() {
+        // The Code screen creates projects/ in the data folder; settings.ron is still missing.
+        let dir = scratch("existing");
+        std::fs::create_dir_all(dir.join("projects/m01/rust")).unwrap();
+        assert_eq!(
+            Settings::load(&dir.join("settings.ron")).unwrap().quality,
+            None
+        );
+        // A settings file without a saved quality also still benchmarks.
+        let s = Settings {
+            units: GridUnits::Metric,
+            ..Settings::default()
+        };
+        s.save(&dir.join("settings.ron")).unwrap();
+        assert_eq!(
+            Settings::load(&dir.join("settings.ron")).unwrap().quality,
+            None
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn missing_file_gives_defaults() {
         let dir = scratch("missing");
         assert_eq!(

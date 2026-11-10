@@ -193,6 +193,9 @@ pub fn code_tick(
     mut screen: ResMut<CodeScreen>,
     robot: Option<Res<CodeRobot>>,
     mut sim: Option<ResMut<SandboxSim>>,
+    mut ins: ResMut<crate::sim_ui::Instruments>,
+    mut live: ResMut<axl_render::instruments::LiveView>,
+    mut trails: ResMut<axl_render::instruments::Trails>,
 ) {
     let s = &mut *screen;
     let changed = s
@@ -230,6 +233,10 @@ pub fn code_tick(
             Ok(new) => {
                 if let Some(sim) = sim.as_mut() {
                     **sim = new;
+                    ins.new_run();
+                    trails.clear();
+                    live.selected = None;
+                    live.drag = None;
                 }
             }
             Err(e) => s
@@ -237,10 +244,8 @@ pub fn code_tick(
                 .push(format!("Could not start the program: {e}")),
         }
     }
-    if let Some(sim) = sim.as_ref()
-        && let Ok(sb) = sim.0.lock()
     {
-        for ev in sb.events().try_iter() {
+        for ev in std::mem::take(&mut ins.inbox) {
             match ev {
                 axl_sim::SimEvent::Started => s.program_log.push("Program started.".into()),
                 axl_sim::SimEvent::Log { stream, line } => {
@@ -271,6 +276,7 @@ pub fn code_panels(
     mut screen: ResMut<CodeScreen>,
     mut inset: ResMut<LeftInset>,
     top: Res<TopInset>,
+    view: Option<ResMut<axl_render::camera_rig::ViewInsets>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?.clone();
     let mut root = egui::Ui::new(
@@ -347,6 +353,10 @@ pub fn code_panels(
             log_view(ui, s);
         });
     inset.0 = panel.response.rect.width();
+    let free = root.available_rect_before_wrap();
+    if let Some(mut v) = view {
+        v.rect = Some([free.min.x, free.min.y, free.max.x, free.max.y]);
+    }
     Ok(())
 }
 

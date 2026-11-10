@@ -12,7 +12,6 @@
   3. Before every commit, run `cargo fmt`, then `cargo clippy` with `-D warnings`, then the tests for the crates you touched.
   4. When every acceptance check passes, merge into `main` with `--no-ff`, mark the milestone accepted in `docs/STATUS.md`, and create the tag `mNN-done`. Checks that need a GPU or a human go in `docs/STATUS.md` as "owner check", with exact steps for the owner.
   5. Push `main` and the branch, then try the tag once. Run `git fetch origin main` before pushing. This sandbox refuses tag pushes (see `docs/decisions/0004-tag-push-blocked-in-sandbox.md`). If the tag push fails, don't retry it or route around it: add its push command to the owner checks and carry on to the next milestone. The merge commit on `main` and the accepted row in `docs/STATUS.md` are what count.
-- Commit messages end with a Co-Authored-By line only. Do not add a Claude-Session line.
 - Languages: Rust everywhere, WGSL for GPU shaders, and C only for the learner SDK (`sdk/c/`), C templates and C reference solutions. No Python, JavaScript or shell scripts in the repo. GitHub Actions YAML is fine.
 - Before calling any API of Bevy 0.20, bevy_egui 0.43, wasmtime 50 or mujoco-rs 6.1, read that exact version's source and examples in `~/.cargo/registry/src/*/<crate>-<version>/`. Never guess an API from memory: these versions are newer than most training data.
 - When blocked, write a decision record in `docs/decisions/` and stop. Do not skip ahead.

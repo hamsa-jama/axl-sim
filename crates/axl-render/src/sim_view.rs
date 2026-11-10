@@ -26,13 +26,14 @@ pub struct SandboxScene {
     pub focus: Vec3,
 }
 
-/// Spawn one entity per simulated body under `root`. Returns the camera home.
+/// Spawn one entity per simulated body under `root`. Returns the camera home and the robot's first body, which the follow camera tracks.
 pub fn spawn_sandbox(
     commands: &mut Commands,
     root: Entity,
     scene: &SandboxScene,
     builder: &mut ShapeBuilder,
-) -> CameraHome {
+) -> (CameraHome, Option<Entity>) {
+    let mut focus = None;
     for body in &scene.bodies.bodies {
         let e = commands
             .spawn((
@@ -43,6 +44,9 @@ pub fn spawn_sandbox(
             ))
             .id();
         commands.entity(root).add_child(e);
+        if focus.is_none() && !body.parts.is_empty() {
+            focus = Some(e);
+        }
         for p in &body.parts {
             let Some((part, color)) = scene.parts.get(&p.uid) else {
                 continue;
@@ -64,10 +68,13 @@ pub fn spawn_sandbox(
         scene.bodies.bodies.len(),
         scene.parts.len()
     );
-    CameraHome {
-        focus: scene.focus,
-        yaw_deg: -50.0,
-        pitch_deg: 30.0,
-        distance: 0.45,
-    }
+    (
+        CameraHome {
+            focus: scene.focus,
+            yaw_deg: -50.0,
+            pitch_deg: 30.0,
+            distance: 0.8,
+        },
+        focus,
+    )
 }

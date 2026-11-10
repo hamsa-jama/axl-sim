@@ -1,6 +1,7 @@
 //! Learner programs (built from C with wasi-sdk) driving the Rover on the sim thread.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use axl_build::starter::build_starter;
@@ -44,6 +45,7 @@ fn build_c(name: &str, source: Option<&str>) -> Option<Vec<u8>> {
             project: dir.clone(),
             sdk: repo().join("sdk"),
             wasi_sdk: Some(sdk),
+            env_remove: Vec::new(),
         },
         |_| {},
     );
@@ -64,7 +66,9 @@ fn skip(what: &str) {
 
 /// Build the Rust m01 template for wasm32-wasip1 (a copy in a temp folder, like a learner's).
 fn build_rust_template() -> Option<Vec<u8>> {
-    if !ToolchainStatus::detect().rust_ready() {
+    // Like a learner: a copy outside the repo (so the repo's rust-toolchain.toml does not apply),
+    // with no toolchain forced through the environment (`env_remove`).
+    if Command::new("rustup").arg("--version").output().is_err() {
         return None;
     }
     let data = std::env::temp_dir().join(format!("axl-prog-{}-rust", std::process::id()));
@@ -77,12 +81,20 @@ fn build_rust_template() -> Option<Vec<u8>> {
         &repo().join("sdk"),
     )
     .unwrap();
+    // Here the wasm32-wasip1 target cannot be downloaded; CI can, and requires the build.
+    if std::env::var_os("AXL_REQUIRE_TOOLCHAINS").is_none()
+        && !ToolchainStatus::detect_in(Some(&project)).rust_ready()
+    {
+        let _ = std::fs::remove_dir_all(&data);
+        return None;
+    }
     let out = build(
         &BuildRequest {
             lang: Lang::Rust,
             project,
             sdk: repo().join("sdk"),
             wasi_sdk: None,
+            env_remove: vec!["RUSTUP_TOOLCHAIN".to_owned()],
         },
         |_| {},
     );
@@ -222,4 +234,79 @@ fn a_program_that_returns_brakes_the_motors_and_the_sim_runs_on() {
     let (t2, x2) = root_x(&mut sb, &c);
     assert!(t2 > t1, "the simulation kept running");
     assert!((x2 - x1).abs() < 0.01, "braked: {x1} -> {x2}");
+}
+
+/// Every checkpoint (whole second -> hash) the events report until `until`, in order, ignoring
+/// everything else.
+fn read_checkpoints(sb: &Sandbox, until: f64, out: &mut std::collections::BTreeMap<u64, u64>) {
+    let t = Instant::now();
+    while t.elapsed().as_secs_f64() < 60.0 {
+        if let Ok(SimEvent::Checkpoint { time, hash, .. }) =
+            sb.events().recv_timeout(Duration::from_millis(100))
+        {
+            out.entry(time as u64).or_insert(hash);
+            if time >= until {
+                return;
+            }
+        }
+    }
+    panic!("no checkpoint at {until} s");
+}
+
+#[test]
+fn rewinding_a_running_program_replays_it_exactly() {
+    let Some(wasm) = build_c("rewind", None) else {
+        skip("wasi-sdk");
+        return;
+    };
+    let c = rover_with_wall();
+    let mut sb = spawn(&c, wasm, false);
+    // The first run, flat out: remember the joint-position hash of every second.
+    let mut first = std::collections::BTreeMap::new();
+    read_checkpoints(&sb, 5.0, &mut first);
+    assert!(first.len() >= 6, "{first:?}");
+    // Rewind to 3 s: the replay passes through the same hashes and then stops there, paused.
+    sb.send(axl_sim::Command::Rewind(3.0));
+    let s = loop {
+        let s = sb.latest().clone();
+        if s.paused && s.replay_target.is_none() && (s.time - 3.0).abs() < 1e-6 {
+            break s;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    assert_eq!(s.hash, first[&3], "the replay differs at 3 s");
+    // Rewind further back and forward again: still the same.
+    sb.send(axl_sim::Command::Rewind(1.0));
+    let t = Instant::now();
+    let s = loop {
+        let s = sb.latest().clone();
+        if s.paused && s.replay_target.is_none() && (s.time - 1.0).abs() < 1e-6 {
+            break s;
+        }
+        assert!(t.elapsed().as_secs_f64() < 30.0, "no replay to 1 s");
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    assert_eq!(s.hash, first[&1]);
+    // Play on from there: the continuation reaches the original hash at 5 s.
+    sb.send(axl_sim::Command::Resume);
+    let mut after = std::collections::BTreeMap::new();
+    // Drain what the first run and the replays reported, then the continuation: later wins.
+    let mut last5 = None;
+    let t = Instant::now();
+    while t.elapsed().as_secs_f64() < 60.0 && last5.is_none() {
+        if let Ok(SimEvent::Checkpoint { time, hash, .. }) =
+            sb.events().recv_timeout(Duration::from_millis(100))
+        {
+            after.insert(time as u64, hash);
+            if time as u64 == 5 && sb.latest().time > 5.0 && !sb.latest().paused {
+                last5 = Some(hash);
+            }
+        }
+    }
+    assert!(
+        after
+            .iter()
+            .all(|(t, h)| first.get(t).is_none_or(|f| f == h))
+    );
+    sb.send(axl_sim::Command::Stop);
 }

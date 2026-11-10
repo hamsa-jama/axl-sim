@@ -270,30 +270,47 @@ pub fn run(args: &Args) -> AppExit {
             .after(status_bar)
             .after(browser_panel),
     );
+    let (script, switch_on) = match args.instruments.as_deref().map(crate::sim_ui::parse_script) {
+        Some(Ok(s)) => s,
+        Some(Err(e)) => {
+            eprintln!("axl: --instruments: {e}");
+            return AppExit::error();
+        }
+        None => Default::default(),
+    };
     if let Some((scene, sim)) = sandbox {
-        app.insert_resource(scene).insert_resource(sim).add_systems(
-            Update,
-            crate::sandbox::pump.before(axl_render::sync::sync_bodies),
+        app.insert_resource(scene).insert_resource(sim);
+        crate::sim_ui::install(&mut app, script.clone(), &switch_on, false);
+        app.add_systems(
+            EguiPrimaryContextPass,
+            crate::sim_ui::instruments_ui
+                .after(control_bar)
+                .after(status_bar),
         );
     }
     if let Some((screen, scene, sim, robot)) = code {
+        app.init_resource::<axl_render::camera_rig::ViewInsets>();
         app.insert_resource(screen)
             .insert_resource(scene)
             .insert_resource(sim)
-            .insert_resource(robot)
-            .add_systems(
-                Update,
-                (
-                    crate::code_ui::code_tick,
-                    crate::sandbox::pump.before(axl_render::sync::sync_bodies),
-                ),
-            )
-            .add_systems(
-                EguiPrimaryContextPass,
-                crate::code_ui::code_panels
-                    .after(control_bar)
-                    .after(status_bar),
-            );
+            .insert_resource(robot);
+        crate::sim_ui::install(&mut app, script, &switch_on, true);
+        app.add_systems(
+            Update,
+            crate::code_ui::code_tick
+                .after(crate::sim_ui::instruments_tick)
+                .before(axl_render::sync::sync_bodies),
+        )
+        .add_systems(
+            EguiPrimaryContextPass,
+            crate::code_ui::code_panels
+                .after(control_bar)
+                .after(status_bar),
+        );
+        app.add_systems(
+            EguiPrimaryContextPass,
+            crate::sim_ui::instruments_ui.after(crate::code_ui::code_panels),
+        );
     }
     app.run()
 }
