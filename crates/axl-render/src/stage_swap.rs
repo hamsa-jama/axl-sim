@@ -46,13 +46,13 @@ pub fn in_sim(kind: Res<StageKind>) -> bool {
     *kind == StageKind::Sim
 }
 
+/// The entities that are the root of a stage.
+type StageRoots = Or<(With<SimStageRoot>, With<BackdropRoot>)>;
+
 /// Show the root of the current stage and hide the others.
 pub fn apply_stage_visibility(
     kind: Res<StageKind>,
-    mut q: Query<
-        (&mut Visibility, Has<SimStageRoot>, Has<BackdropRoot>),
-        Or<(With<SimStageRoot>, With<BackdropRoot>)>,
-    >,
+    mut q: Query<(&mut Visibility, Has<SimStageRoot>, Has<BackdropRoot>), StageRoots>,
 ) {
     for (mut v, sim, back) in &mut q {
         let show = (sim && *kind == StageKind::Sim) || (back && *kind == StageKind::Backdrop);
