@@ -1,0 +1,11 @@
+(
+    version: 1,
+    id: "cube_wood_40",
+    name: "Wood cube 40 mm",
+    shape: Cube(0.04),
+    mass: 0.032,
+    friction: 0.4,
+    hollow: false,
+    source: "SPEC: pine, about 500 kg/m3",
+    color: (222, 184, 135),
+)

@@ -573,6 +573,7 @@ dependencies = [
  "axl-hw",
  "axl-mujoco",
  "axl-parts",
+ "axl-world",
  "crossbeam-channel",
  "thiserror 2.0.21",
  "triple_buffer",
@@ -594,6 +595,11 @@ dependencies = [
 [[package]]
 name = "axl-world"
 version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "bevy"

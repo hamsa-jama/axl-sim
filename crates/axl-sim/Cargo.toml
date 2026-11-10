@@ -20,3 +20,4 @@ thiserror = "2"
 [dev-dependencies]
 axl-build = { path = "../axl-build" }
 axl-parts = { path = "../axl-parts" }
+axl-world = { path = "../axl-world" }

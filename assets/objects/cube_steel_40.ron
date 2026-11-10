@@ -1,0 +1,11 @@
+(
+    version: 1,
+    id: "cube_steel_40",
+    name: "Steel cube 40 mm",
+    shape: Cube(0.04),
+    mass: 0.25,
+    friction: 0.3,
+    hollow: false,
+    source: "SPEC: a heavy block for pushing tests",
+    color: (150, 155, 160),
+)

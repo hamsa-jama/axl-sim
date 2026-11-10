@@ -1,0 +1,11 @@
+(
+    version: 1,
+    id: "can_330",
+    name: "Drink can 330 ml",
+    shape: Cylinder(diameter: 0.066, height: 0.115),
+    mass: 0.36,
+    friction: 0.3,
+    hollow: false,
+    source: "SPEC: a full 330 ml can, treated as solid",
+    color: (200, 40, 40),
+)

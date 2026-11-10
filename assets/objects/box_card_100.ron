@@ -1,0 +1,11 @@
+(
+    version: 1,
+    id: "box_card_100",
+    name: "Cardboard box 100 mm",
+    shape: Cube(0.1),
+    mass: 0.05,
+    friction: 0.5,
+    hollow: false,
+    source: "SPEC: empty cardboard box",
+    color: (196, 154, 108),
+)

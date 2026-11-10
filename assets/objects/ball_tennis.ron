@@ -1,0 +1,11 @@
+(
+    version: 1,
+    id: "ball_tennis",
+    name: "Tennis ball",
+    shape: Sphere(0.067),
+    mass: 0.058,
+    friction: 0.6,
+    hollow: true,
+    source: "SPEC: hollow, shellinertia",
+    color: (205, 220, 60),
+)
