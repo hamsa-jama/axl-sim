@@ -9,3 +9,10 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+wasmtime = { version = "=50.0.1", default-features = false, features = ["runtime", "cranelift", "wat", "addr2line", "backtrace", "demangle", "std"] }
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+crossbeam-channel = "0.5"
+axl-hw = { path = "../axl-hw" }
+rand_chacha = "0.3"

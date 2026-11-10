@@ -9,6 +9,7 @@ members = [
     "crates/axl-mujoco",
     "crates/axl-hw",
     "crates/axl-host",
+    "crates/axl-code",
     "crates/axl-sim",
     "crates/axl-world",
     "crates/axl-missions",

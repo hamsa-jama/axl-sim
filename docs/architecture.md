@@ -56,3 +56,16 @@ part's meshes under a `SimBody` entity using the body map. Try it: `axl --sandbo
 ## After M6
 
 `axl-hw` (no Bevy) holds the hardware models: `Hardware::new(&DeviceMap, &HwParams, HwOptions, &Physics)` builds a battery, a `Motor` per motor or servo (command mode, PI loops, `Encoder`), and the sensors (`Ultrasonic`, `TimeOfFlight`, `ColorSensor`, `TouchSensor`, `Imu`) from the compiler's device map. The sim loop calls `pre_step` (battery voltage, then motor commands to `ctrl`), `Physics::step`, `post_step` (encoders, currents, charge, then any sensor sample that is due, after a `forward()`). Each sensor samples on a whole-millisecond clock into a fixed 8-entry `DelayQueue`; a read at time t returns the newest sample at or before t minus the delay. Noise comes from per-device `ChaCha8Rng` streams seeded by (run seed, port letter, stream). Devices have handles (their index in `Hardware::devices()`) with a `DeviceKind` and a `Slot`, which the M7 host uses for wrong-device errors. `axl-hw::rig` builds small MJCF rigs for tests and the accuracy suite. Choices the spec leaves open: decision 0012.
+
+## After M7
+
+`axl-host` (no Bevy, no MuJoCo) loads a learner's `.wasm` with wasmtime and exposes the 29-function
+ABI (module `axl`) over a `RobotApi` trait; its `toolchain` module finds wasi-sdk and the Rust
+target, builds a project (clang or cargo child process, diagnostics parsed to file, line and
+column) and copies templates into `<data dir>/projects/<mission>/<c|rust>/`. `axl-sim`'s
+`SimRobot` implements `RobotApi` on the sim thread: `axl_step(ms)` runs 1 ms ticks paced against the
+wall clock, and `Sandbox::spawn_program` streams `SimEvent`s (log lines, plots, pose marks, lines,
+the end of the program). `axl-code` is the Code screen's logic without a window (API reference
+parsed from `sdk/c/axl.h`, highlighting, file watching, build sessions); `axl-app::code_ui` is
+only egui. The SDKs are `sdk/c/axl.h` (authoritative) and `sdk/rust/axl-robot` (mirrors it).
+Try it: `axl --code m01 --code-run`.

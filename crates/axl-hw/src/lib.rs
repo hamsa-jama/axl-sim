@@ -321,6 +321,11 @@ impl Hardware {
         self.motors.get_mut(i)
     }
 
+    /// All motors, mutable.
+    pub fn motors_mut(&mut self) -> &mut [Motor] {
+        &mut self.motors
+    }
+
     /// All motors.
     pub fn motors(&self) -> &[Motor] {
         &self.motors

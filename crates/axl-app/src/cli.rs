@@ -40,6 +40,19 @@ pub struct Args {
     #[arg(long, value_name = "STARTER", conflicts_with_all = ["headless", "lookdev", "stress_boxes", "parts", "builder"])]
     pub sandbox: Option<String>,
 
+    /// Open the Code screen for this mission (for example `m01`): editor, API reference, build
+    /// log, and a Rover that runs the built program.
+    #[arg(long, value_name = "MISSION", conflicts_with_all = ["headless", "lookdev", "stress_boxes", "parts", "builder", "sandbox"])]
+    pub code: Option<String>,
+
+    /// With --code: start with this language, `c` or `rust`.
+    #[arg(long, value_name = "LANG", requires = "code")]
+    pub code_lang: Option<String>,
+
+    /// With --code: build and run the program as soon as the screen opens.
+    #[arg(long, requires = "code")]
+    pub code_run: bool,
+
     /// With --sandbox: motor voltages, for example `left=4,right=4`.
     #[arg(long, value_name = "LIST", requires = "sandbox")]
     pub volts: Option<String>,
