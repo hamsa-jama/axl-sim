@@ -3,6 +3,7 @@
 mod fetch_mujoco;
 mod mujoco_checksums;
 mod mujoco_env;
+mod package;
 mod sdk_check;
 
 use std::path::PathBuf;
@@ -34,7 +35,7 @@ enum Command {
         #[arg(long)]
         require_rust: bool,
     },
-    /// Build the release package for this OS (arrives with M10).
+    /// Build the release package for this OS (M10).
     Package,
     /// Write assets/parts/*.ron from the generator in axl-parts.
     GenParts,
@@ -70,7 +71,7 @@ fn main() -> Result<()> {
                 require_rust,
             },
         ),
-        Command::Package => not_yet("package", "M10"),
+        Command::Package => package::run_package(&workspace_root()),
         Command::GenParts => {
             let n = axl_parts::catalog::write_builtin(&workspace_root().join("assets/parts"))?;
             println!("wrote {n} part files to assets/parts");
