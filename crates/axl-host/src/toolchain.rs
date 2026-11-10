@@ -364,6 +364,9 @@ pub struct BuildRequest {
     pub sdk: PathBuf,
     /// wasi-sdk folder (C only); `None` finds it with [`find_wasi_sdk`].
     pub wasi_sdk: Option<PathBuf>,
+    /// Environment variables the build's child processes must not inherit (the tests drop
+    /// `RUSTUP_TOOLCHAIN` to build like a learner whose shell sets nothing).
+    pub env_remove: Vec<String>,
 }
 
 /// The result of a build.
@@ -464,6 +467,9 @@ pub fn build(req: &BuildRequest, mut log: impl FnMut(&str)) -> BuildOutcome {
         }
         Lang::Rust => {
             let mut cmd = Command::new("cargo");
+            for k in &req.env_remove {
+                cmd.env_remove(k);
+            }
             cmd.args([
                 "build",
                 "--target",

@@ -45,6 +45,7 @@ fn build_c(name: &str, source: Option<&str>) -> Option<Vec<u8>> {
             project: dir.clone(),
             sdk: repo().join("sdk"),
             wasi_sdk: Some(sdk),
+            env_remove: Vec::new(),
         },
         |_| {},
     );
@@ -66,9 +67,7 @@ fn skip(what: &str) {
 /// Build the Rust m01 template for wasm32-wasip1 (a copy in a temp folder, like a learner's).
 fn build_rust_template() -> Option<Vec<u8>> {
     // Like a learner: a copy outside the repo (so the repo's rust-toolchain.toml does not apply),
-    // with no toolchain forced through the environment.
-    // SAFETY: only this test binary reads the variable, and it does so after this point.
-    unsafe { std::env::remove_var("RUSTUP_TOOLCHAIN") };
+    // with no toolchain forced through the environment (`env_remove`).
     if Command::new("rustup").arg("--version").output().is_err() {
         return None;
     }
@@ -95,6 +94,7 @@ fn build_rust_template() -> Option<Vec<u8>> {
             project,
             sdk: repo().join("sdk"),
             wasi_sdk: None,
+            env_remove: vec!["RUSTUP_TOOLCHAIN".to_owned()],
         },
         |_| {},
     );

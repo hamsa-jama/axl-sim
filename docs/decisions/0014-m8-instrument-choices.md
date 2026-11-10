@@ -38,7 +38,7 @@ spring. The spec fixes what they show; these are the choices it left open.
    projection to the middle of the free area (`sub_camera_view`), which Bevy's main-world
    `viewport_to_world` and `world_to_viewport` do not know about; both are corrected by the same
    offset.
-9. **Plots.** `egui_plot` 0.37.0 (the version that pairs with egui 0.36), 50 samples per second of
+9. **Plots.** Built-in channels: per motor angle, speed and current, battery voltage, each distance, colour (reflectance) and touch sensor's reading, and the true x, y and yaw. `egui_plot` 0.37.0 (the version that pairs with egui 0.36), 50 samples per second of
    simulated time for the built-in channels, 300 s of history, a 5 to 60 s window, the cursor
    readout, and CSV through `rfd` (`AXL_CSV_EXPORT_PATH` writes without a dialog, for tests). The
    CSV has a `time_s` column then one column per channel, RFC 4180 quoting, empty cells where a

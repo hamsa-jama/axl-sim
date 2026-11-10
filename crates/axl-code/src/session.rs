@@ -75,6 +75,7 @@ impl CodeSession {
             project: self.project.dir.clone(),
             sdk: self.sdk.clone(),
             wasi_sdk: self.toolchain.wasi_sdk.clone(),
+            env_remove: Vec::new(),
         }));
     }
 
