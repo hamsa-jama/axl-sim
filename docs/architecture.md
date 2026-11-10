@@ -106,10 +106,36 @@ a built program over (`CodeScreen::request_submit`) and a thread grades it. Refe
 `templates/{c,rust}/mNN`. `cargo xtask sdk-check` builds all of them and grades them headless
 (templates must not pass, solutions must). Choices: decision 0015.
 
-## After M10 (so far)
+## After M10
 
-`cargo xtask package` stages `axl`, the MuJoCo library (rpath `$ORIGIN` or `@executable_path`),
-`assets/`, `sdk/`, `templates/`, the guide, the README and the accuracy report, then packs them
-with the system `tar` (`.tar.gz`, `.zip`) or `hdiutil` (`.dmg`). `release.yml` runs it on three
-OSes for tags `v*`. The UI scale is a `UiScale` resource in `gui.rs`, applied with egui's zoom
-factor and stored as `ui_scale` in `settings.ron`.
+**Screens.** `axl-app::nav` holds `Screen` (Home, Missions, Builder, Code, Simulate, Results,
+Settings), the `Nav` resource and the `Action`s screens ask for (`Go`, `OpenMission`,
+`OpenSandbox`, `SimulateDesign`, `Watch`). `apply_nav` runs once per frame: it builds or drops the
+mission resources (`MissionScreen`, `CodeScreen`, `CodeRobot`, `SandboxScene`, `WorldScene`,
+`SandboxSim`), sets `StageKind` and `ViewMode`, and resets the insets. Panels are Bevy systems
+gated with `run_if(on(Screen::X))` and, where they need a resource, `resource_exists`.
+`Library` (missions, progress, accuracy report) feeds Home, Missions and About. The look-dev,
+parts and stress views (`--lookdev`, `--parts`, `--stress-boxes`) keep their own stage and run
+with `Nav::active == false`.
+
+**Stage.** `axl-render::stage_swap` has `StageKind` (Backdrop, Builder, Sim). The backdrop scene
+and the simulation stage hang under their own roots; `apply_stage_visibility` shows one root.
+`rebuild_sim_stage` rebuilds the simulation stage when `SandboxScene` or `WorldScene` changes and
+points the camera at it (`SandboxScene::home`). `world_view` draws the mat (a texture, 1 mm
+pixels, linear colour), walls and statics, loose objects (moved by body id from the snapshots) and
+zones. The picture and the physics use the same numbers: `axl-world::build` returns the shape and
+object visuals it wrote into the MJCF.
+
+**Mission world on the stage.** `axl-sim::mission::MissionSetup::spawn_live` starts the sim thread
+with the same setup, scenario and seed as a graded run (the first grading seed), paced against
+the wall clock. The Sandbox is `axl_missions::library::sandbox()`: the Rover on `open_grid` with
+nothing to pass, started through the same path.
+
+**Release.** `cargo xtask package` stages `axl`, the MuJoCo library (rpath `$ORIGIN` or
+`@executable_path`, set with `cargo rustc` so dependency builds are reused), `assets/`, `sdk/`,
+`templates/`, the guide, the README and the accuracy report (`accuracy-report.md`, read by About),
+then packs them with the system `tar` (`.tar.gz`, `.zip`) or `hdiutil` (`.dmg`). `release.yml` runs
+it on three OSes for tags `v*`, checks the tag against the Cargo version, runs the accuracy suite
+and attaches the packages and the report. The UI scale is a `UiScale` resource in `gui.rs`,
+applied with egui's zoom factor and stored as `ui_scale` in `settings.ron`, with the toolchain
+paths (`wasi_sdk_path`, `cargo_path`, applied through `axl_host::toolchain::set_overrides`).
