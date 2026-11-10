@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M8 Instruments is accepted and merged into `main` (merge commit MERGE_M8); the next milestone is M9 (not started). Open items: owner checks O16 to O18. Screenshots (all under Xvfb and llvmpipe, Low): `docs/screenshots/m8-overlay-1-frames.png`, `m8-overlay-2-balance.png`, `m8-overlay-3-contacts.png`, `m8-overlay-4-sensors.png`, `m8-overlay-5-trails.png`, `m8-overlay-6-drawings-code-screen.png`, `m8-overlay-7-xray.png`, `m8-all-overlays-inspector.png`, `m8-joint-hover.png`, `m8-mouse-drag.png`, `m8-rewind-to-1s.png`, `m8-plotter-csv-export.png`, `m8-code-screen-instruments.png`, `m8-code-follow-rover.png`. No spec problems found in M8; the built-in plot channels are listed in decision 0014 (motor angle, speed and current, battery voltage, each sensor's reading, true x, y and yaw).
+M8 Instruments is accepted and merged into `main` (merge commit 1910466); the next milestone is M9 (not started). Open items: owner checks O16 to O18. Screenshots (all under Xvfb and llvmpipe, Low): `docs/screenshots/m8-overlay-1-frames.png`, `m8-overlay-2-balance.png`, `m8-overlay-3-contacts.png`, `m8-overlay-4-sensors.png`, `m8-overlay-5-trails.png`, `m8-overlay-6-drawings-code-screen.png`, `m8-overlay-7-xray.png`, `m8-all-overlays-inspector.png`, `m8-joint-hover.png`, `m8-mouse-drag.png`, `m8-rewind-to-1s.png`, `m8-plotter-csv-export.png`, `m8-code-screen-instruments.png`, `m8-code-follow-rover.png`. No spec problems found in M8; the built-in plot channels are listed in decision 0014 (motor angle, speed and current, battery voltage, each sensor's reading, true x, y and yaw).
 
 ## Owner checks
 
@@ -45,7 +45,7 @@ Checks that need a GPU, a display or a person. Each has exact steps.
 | O14 | M6 | Push the `m06-done` tag (sandbox push refused) | Done by the owner. |
 | O15 | M7 | Push the `m07-done` tag (sandbox push refused) | Done by the owner. |
 | O16 | M7 | Rust controllers build and run on a real machine | `rustup target add wasm32-wasip1`, then `cargo run -p axl-app --release -- --code m01 --code-lang rust --code-run`. The log should show `cargo build` then `Program started.`; CI runs the same build in `cargo test` with `AXL_REQUIRE_TOOLCHAINS=1`. Also look at the Code screen on a real GPU (`docs/screenshots/m7-code-c.png`). |
-| O17 | M8 | Push the `m08-done` tag (sandbox push refused) | `git fetch origin && git tag -a m08-done -m "M8 instruments accepted" MERGE_M8 && git push origin m08-done` (MERGE_M8 is the M8 merge commit on `main`, named in Where I stopped). |
+| O17 | M8 | Push the `m08-done` tag (sandbox push refused) | `git fetch origin && git tag -a m08-done -m "M8 instruments accepted" 1910466 && git push origin m08-done` (1910466 is the M8 merge commit on `main`, named in Where I stopped). |
 | O18 | M8 | Instruments on a real GPU | `cargo run -p axl-app --release -- --sandbox rover --volts left=2,right=2`, then: press 1 to 7 (each overlay toggles), Space, `.`, Shift+`.`, `[` and `]`, Ctrl+R; click a body (inspector), hover a wheel hinge (angle, speed, torque), drag the robot with the left mouse button (it should follow the cursor smoothly and let go on release), tick Plots, Export CSV and open the file in a spreadsheet; drag the time slider back and release (the robot goes back to that moment, paused). Compare with `docs/screenshots/m8-*.png`. Also repeat `--code m01 --code-lang rust --code-run` on the machine that had no default toolchain (O16). |
 
 ## Development notes
