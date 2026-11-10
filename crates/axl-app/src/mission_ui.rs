@@ -163,6 +163,11 @@ impl MissionScreen {
         self.def.predict.is_some() && self.predicted().is_none()
     }
 
+    /// Check a built program on every grading seed (the `--grade` flag).
+    pub fn grade_program(&mut self, wasm: Vec<u8>) {
+        self.start_grading(wasm);
+    }
+
     fn start_grading(&mut self, wasm: Vec<u8>) {
         let def = self.def.clone();
         let hints_used = self.progress.hints_open(&def.id) > 0;

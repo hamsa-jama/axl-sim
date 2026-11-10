@@ -33,8 +33,11 @@ pub fn status_text(s: Status) -> (&'static str, egui::Color32) {
     }
 }
 
+/// The brief without its first heading (the Goal line above it says the same).
 fn blocks(ui: &mut egui::Ui, md: &str) {
-    for b in results::blocks(md) {
+    let all = results::blocks(md);
+    let skip = usize::from(matches!(all.first(), Some(Block::Heading(_))));
+    for b in all.into_iter().skip(skip) {
         match b {
             Block::Heading(t) => {
                 ui.add_space(4.0);

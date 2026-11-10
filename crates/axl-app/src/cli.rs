@@ -62,6 +62,21 @@ pub struct Args {
     #[arg(long, requires = "code")]
     pub code_run: bool,
 
+    /// Start on this screen: `home`, `missions`, `builder`, `code`, `simulate`, `results`,
+    /// `settings` or `about`. Without it the app starts on Home (or on the screen a flag such as
+    /// `--code` implies).
+    #[arg(long, value_name = "SCREEN", conflicts_with_all = ["headless", "lookdev", "stress_boxes", "parts"])]
+    pub screen: Option<String>,
+
+    /// With --screen missions: open the detail view of this mission.
+    #[arg(long, value_name = "MISSION", requires = "screen")]
+    pub detail: Option<String>,
+
+    /// With --code: check this program (a `.wasm` file) on every grading seed as soon as the
+    /// mission opens, then show the Results screen.
+    #[arg(long, value_name = "WASM", requires = "code")]
+    pub grade: Option<PathBuf>,
+
     /// With --sandbox: motor voltages, for example `left=4,right=4`.
     #[arg(long, value_name = "LIST", requires = "sandbox")]
     pub volts: Option<String>,

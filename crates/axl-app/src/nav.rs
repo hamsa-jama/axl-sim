@@ -124,6 +124,10 @@ pub struct Nav {
     pub lang: Lang,
     /// Build and run when the first mission opens (`--code-run`).
     pub run_first: bool,
+    /// The screen a mission opens to (Code, unless a flag says otherwise).
+    pub open_to: Screen,
+    /// Check this program as soon as the first mission opens (`--grade`).
+    pub grade_file: Option<std::path::PathBuf>,
     shown: Option<Screen>,
 }
 
@@ -139,6 +143,8 @@ impl Nav {
             message: String::new(),
             lang: Lang::C,
             run_first: false,
+            open_to: Screen::Code,
+            grade_file: None,
             shown: None,
         }
     }
@@ -395,12 +401,19 @@ pub fn apply_nav(
             }
             Action::OpenMission(id) => {
                 let run = std::mem::take(&mut nav.run_first);
+                let grade = nav.grade_file.take().and_then(|p| match std::fs::read(&p) {
+                    Ok(b) => Some(b),
+                    Err(e) => {
+                        eprintln!("axl: --grade {}: {e}", p.display());
+                        None
+                    }
+                });
                 match library::mission(&id)
                     .map_err(|e| e.to_string())
-                    .and_then(|def| open_mission(&mut commands, &def, nav.lang, run))
+                    .and_then(|def| open_mission(&mut commands, &def, nav.lang, run, grade))
                 {
                     Ok(note) => {
-                        nav.screen = Screen::Code;
+                        nav.screen = std::mem::replace(&mut nav.open_to, Screen::Code);
                         nav.message = note;
                         reset_run = true;
                     }
@@ -496,6 +509,7 @@ fn open_mission(
     def: &MissionDef,
     lang: Lang,
     run: bool,
+    grade: Option<Vec<u8>>,
 ) -> Result<String, String> {
     let design = newest_design();
     let mut screen = MissionScreen::open(&def.id)?;
@@ -511,6 +525,9 @@ fn open_mission(
         );
         "No saved design yet: the Rover stands in.".into()
     };
+    if let Some(wasm) = grade {
+        screen.grade_program(wasm);
+    }
     install_live(commands, live);
     commands.insert_resource(screen);
     commands.insert_resource(code);

@@ -289,6 +289,7 @@ pub fn run(args: &Args) -> AppExit {
         None => Default::default(),
     };
     if !screens {
+        app.insert_resource(crate::nav::Nav::new(false, crate::nav::Screen::Home));
         return app.run();
     }
     install_screens(&mut app, args, sandbox, code, script, &switch_on);
@@ -310,16 +311,43 @@ fn install_screens(
 ) {
     use crate::nav::{Action, Library, Nav, Screen, on};
 
+    let named = args.screen.as_deref().map(|s| match s {
+        "home" => Ok(Screen::Home),
+        "missions" => Ok(Screen::Missions),
+        "builder" => Ok(Screen::Builder),
+        "code" => Ok(Screen::Code),
+        "simulate" => Ok(Screen::Simulate),
+        "results" => Ok(Screen::Results),
+        "settings" | "about" => Ok(Screen::Settings),
+        other => Err(other.to_owned()),
+    });
+    let named = match named {
+        Some(Ok(s)) => Some(s),
+        Some(Err(o)) => {
+            eprintln!(
+                "axl: --screen {o:?}: use home, missions, builder, code, simulate, results, settings or about"
+            );
+            None
+        }
+        None => None,
+    };
     let first = if code.is_some() {
-        Screen::Code
+        named.unwrap_or(Screen::Code)
     } else if sandbox.is_some() {
         Screen::Simulate
     } else if args.builder {
         Screen::Builder
     } else {
-        Screen::Home
+        named.unwrap_or(Screen::Home)
     };
     let mut nav = Nav::new(true, first);
+    nav.open_to = named.unwrap_or(Screen::Code);
+    nav.about = args.screen.as_deref() == Some("about");
+    nav.detail.clone_from(&args.detail);
+    nav.grade_file.clone_from(&args.grade);
+    if code.is_none() && sandbox.is_none() && !args.builder && named.is_some() {
+        nav.pending = Some(Action::Go(first));
+    }
     nav.lang = match args.code_lang.as_deref() {
         Some("rust") => axl_host::toolchain::Lang::Rust,
         _ => axl_host::toolchain::Lang::C,
@@ -482,9 +510,21 @@ fn control_bar(
     mut cams: Query<&mut Transform, With<ViewCamera>>,
     mut top: ResMut<TopInset>,
     mut ui_scale: ResMut<UiScale>,
+    nav: Res<crate::nav::Nav>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
-    let mut root = viewport_ui(ctx);
+    // The navigation bar (drawn before this one) took the top of the window.
+    let below_nav = if nav.active { top.0 } else { 0.0 };
+    let mut root = egui::Ui::new(
+        ctx.clone(),
+        "controls_root".into(),
+        egui::UiBuilder::new()
+            .layer_id(egui::LayerId::background())
+            .max_rect(egui::Rect::from_min_max(
+                ctx.viewport_rect().min + egui::vec2(0.0, below_nav),
+                ctx.viewport_rect().max,
+            )),
+    );
     let bar = egui::Panel::top("controls").show(&mut root, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label("Quality");
