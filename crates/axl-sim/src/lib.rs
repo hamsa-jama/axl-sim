@@ -1,25 +1,28 @@
 //! axl-sim: the sim thread. It owns MuJoCo and steps it in lockstep at 1 ms, paced against the
-//! wall clock, and publishes a [`SimSnapshot`] of every body pose through a triple buffer.
+//! wall clock, and publishes a [`SimSnapshot`] of every body pose (plus what the overlays and
+//! instruments draw) through a triple buffer.
 //!
 //! The step loop is `hw.pre_step`, `physics.step`, `hw.post_step` (battery, motors, encoders and
-//! sensors from `axl-hw`). The sandbox drives motors with fixed voltages; the controller (M7)
-//! joins the loop later.
+//! sensors from `axl-hw`). With a controller (M7) the program's `axl_step` runs the ticks; without
+//! one the thread steps on its own. Time controls (pause, step, speed, reset, rewind by replay)
+//! and the mouse drag are commands ([`Command`]); see [`plot`] for the plotter's data and CSV.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod plot;
 mod program;
 pub use program::{MAX_PLOT_CHANNELS, ProgramConfig, SimEvent, SimRobot};
 
+use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
 
 use axl_compile::Compiled;
-use axl_hw::{Hardware, HwParams};
+use axl_hw::{Hardware, HwParams, SensorVisual};
 pub use axl_hw::{HwOptions, MotorCommand};
-use axl_mujoco::{BodyId, Physics, PhysicsError, Pose};
+use axl_mujoco::{BodyId, ContactInfo, GeomId, JointId, Physics, PhysicsError, Pose};
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use triple_buffer::{Input, Output, triple_buffer};
+use triple_buffer::{Output, triple_buffer};
 
 /// Simulated seconds between published snapshots (250 Hz cap).
 pub const SNAPSHOT_INTERVAL_S: f64 = 0.004;
@@ -37,6 +40,55 @@ pub enum SimError {
     NoMotor(String),
 }
 
+/// A moving body as the inspector shows it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BodyView {
+    /// Linear velocity of the centre of mass, world frame, m/s.
+    pub velocity: [f64; 3],
+    /// Angular velocity, world frame, rad/s.
+    pub angular_velocity: [f64; 3],
+    /// Centre of mass, world frame, metres.
+    pub com: [f64; 3],
+    /// Mass, kg (this body only).
+    pub mass: f64,
+    /// Principal moments of inertia, kg m^2.
+    pub inertia: [f64; 3],
+}
+
+/// A hinge as the joint hover shows it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct JointView {
+    /// Joint id in the model.
+    pub joint: usize,
+    /// The body it moves.
+    pub body: usize,
+    /// Anchor, world frame, metres.
+    pub anchor: [f64; 3],
+    /// Unit axis, world frame.
+    pub axis: [f64; 3],
+    /// Angle, radians.
+    pub angle: f64,
+    /// Speed, rad/s.
+    pub speed: f64,
+    /// Torque along the axis (actuator, damping, friction and constraints), N m.
+    pub torque: f64,
+}
+
+/// One contact as the contacts overlay shows it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ContactView {
+    /// Position, world frame.
+    pub pos: [f64; 3],
+    /// Unit normal, world frame (from the first geom to the second).
+    pub normal: [f64; 3],
+    /// Normal force, newtons.
+    pub normal_force: f64,
+    /// Friction forces along the two tangents, newtons.
+    pub friction: [f64; 2],
+    /// A contact with the static world whose normal is mostly vertical: part of the support polygon.
+    pub floor: bool,
+}
+
 /// Everything the app needs to draw one moment of the simulation.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SimSnapshot {
@@ -46,6 +98,47 @@ pub struct SimSnapshot {
     pub bodies: Vec<Pose>,
     /// Set when the run stopped because the simulation became unstable.
     pub error: Option<String>,
+    /// Inspector data of every body, indexed like `bodies`.
+    pub body_info: Vec<BodyView>,
+    /// Every hinge.
+    pub joints: Vec<JointView>,
+    /// Every contact.
+    pub contacts: Vec<ContactView>,
+    /// Centre of mass of the whole robot (MuJoCo `subtree_com` of its root body), world frame.
+    pub com: [f64; 3],
+    /// Mass of the whole robot, kg.
+    pub robot_mass: f64,
+    /// The robot's root body id.
+    pub root_body: usize,
+    /// Distance and colour sensors as the sensors overlay draws them.
+    pub sensors: Vec<SensorVisual>,
+    /// Device names, indexed by the `device` of a [`SensorVisual`].
+    pub device_names: Arc<Vec<String>>,
+    /// Names of the built-in plot channels, in the order of `channel_values`.
+    pub channel_names: Arc<Vec<String>>,
+    /// Values of the built-in plot channels now.
+    pub channel_values: Vec<f64>,
+    /// A hash of every joint position (see [`joint_hash`]).
+    pub hash: u64,
+    /// True while the simulation is paused.
+    pub paused: bool,
+    /// The speed factor.
+    pub speed: f64,
+    /// While replaying to rewind: the time being replayed to.
+    pub replay_target: Option<f64>,
+}
+
+/// A hash of all joint positions (`qpos`) of a run, to compare two runs exactly (FNV-1a over the
+/// bit patterns).
+pub fn joint_hash(physics: &Physics) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for q in physics.qpos() {
+        for b in q.to_bits().to_le_bytes() {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    h
 }
 
 /// Commands from the app to the sim thread.
@@ -55,9 +148,17 @@ pub enum Command {
     Pause,
     /// Continue.
     Resume,
-    /// Back to the start (voltages stay).
+    /// While paused, run this many 1 ms ticks (1 or 10 from the keyboard).
+    Step {
+        /// Milliseconds of simulated time.
+        ms: u32,
+    },
+    /// Back to the start (the controller restarts, voltages stay).
     Reset,
-    /// Pace against wall-clock time multiplied by this factor.
+    /// Rewind (or fast-forward) to this simulated time by deterministic replay from 0, with
+    /// pacing off, then pause there. Drag forces and the controller are replayed.
+    Rewind(f64),
+    /// Pace against wall-clock time multiplied by this factor (0.1 to 4).
     SetSpeed(f64),
     /// Give a motor a command (power, speed, position, brake, coast).
     SetMotor {
@@ -73,6 +174,26 @@ pub enum Command {
         /// Applied voltage.
         volts: f64,
     },
+    /// Which body is under this ray? The answer is a [`SimEvent::Picked`] with the same `id`.
+    Pick {
+        /// Echoed in the answer.
+        id: u64,
+        /// Ray origin, world frame.
+        origin: [f64; 3],
+        /// Ray direction (need not be unit length).
+        dir: [f64; 3],
+    },
+    /// Apply a drag force to a body at a world point until replaced or cleared (the mouse spring).
+    ApplyDragForce {
+        /// MuJoCo body id.
+        body: usize,
+        /// World point of application.
+        point: [f64; 3],
+        /// Force, newtons.
+        force: [f64; 3],
+    },
+    /// The mouse drag ended: remove the drag force.
+    ClearDrag,
     /// End the thread.
     Stop,
 }
@@ -83,6 +204,12 @@ pub struct SimCore {
     hw: Hardware,
     n_bodies: usize,
     last_publish: f64,
+    volts: Vec<(String, f64)>,
+    root: BodyId,
+    n_joints: usize,
+    contacts: Vec<ContactInfo>,
+    device_names: Arc<Vec<String>>,
+    channel_names: Arc<Vec<String>>,
 }
 
 impl SimCore {
@@ -99,11 +226,25 @@ impl SimCore {
     ) -> Result<Self, SimError> {
         let physics = Physics::from_mjcf(&robot.mjcf)?;
         let hw = Hardware::new(&robot.devices, &HwParams::builtin(), opts, &physics);
+        let root = BodyId(robot.bodies.bodies.first().map_or(1, |b| b.id));
+        let device_names = Arc::new(hw.devices().iter().map(|d| d.name.clone()).collect());
+        let mut names = hw.channel_names();
+        names.extend(
+            ["true x (m)", "true y (m)", "true yaw (rad)"]
+                .iter()
+                .map(|s| (*s).to_owned()),
+        );
         let mut core = Self {
             n_bodies: physics.body_count(),
+            n_joints: physics.joint_count(),
             physics,
             hw,
             last_publish: f64::NEG_INFINITY,
+            volts: volts.to_vec(),
+            root,
+            contacts: Vec::new(),
+            device_names,
+            channel_names: Arc::new(names),
         };
         for (m, v) in volts {
             core.set_volts(m, *v)?;
@@ -135,6 +276,11 @@ impl SimCore {
         &self.physics
     }
 
+    /// The physics, mutable (rays, applied forces).
+    pub fn physics_mut(&mut self) -> &mut Physics {
+        &mut self.physics
+    }
+
     /// The hardware models, for readings.
     pub fn hardware(&self) -> &Hardware {
         &self.hw
@@ -145,10 +291,18 @@ impl SimCore {
         &mut self.hw
     }
 
-    /// Back to the start.
+    /// The robot's root body.
+    pub fn root_body(&self) -> BodyId {
+        self.root
+    }
+
+    /// Back to the start. The voltages given at the start are applied again.
     pub fn reset(&mut self) {
         self.physics.reset();
         self.hw.reset(&self.physics);
+        for (m, v) in self.volts.clone() {
+            let _ = self.set_volts(&m, v);
+        }
         self.last_publish = f64::NEG_INFINITY;
     }
 
@@ -161,19 +315,74 @@ impl SimCore {
         !self.physics.warnings().is_unstable()
     }
 
-    /// Write the current poses into `out` in place (no allocation after the first call). Velocities,
-    /// contacts and sensors describe the start of the step until `forward()` runs, so it runs first.
+    /// Write the current state into `out` in place (no allocation after the first call).
+    /// Velocities, contacts and sensors describe the start of the step until `forward()` runs, so
+    /// it runs first.
     pub fn fill(&mut self, out: &mut SimSnapshot) {
         self.physics.forward();
         out.time = self.physics.time();
         out.bodies.clear();
         out.bodies
             .extend((0..self.n_bodies).map(|i| self.physics.body_pose(BodyId(i))));
+        out.body_info.clear();
+        out.body_info.extend((0..self.n_bodies).map(|i| {
+            let b = BodyId(i);
+            BodyView {
+                velocity: self.physics.body_linear_velocity(b),
+                angular_velocity: self.physics.body_angular_velocity(b),
+                com: self.physics.body_com(b),
+                mass: self.physics.body_mass(b),
+                inertia: self.physics.body_inertia(b),
+            }
+        }));
+        out.joints.clear();
+        for j in 0..self.n_joints {
+            let id = JointId(j);
+            if self.physics.joint_is_free(id) {
+                continue;
+            }
+            let (anchor, axis) = self.physics.joint_anchor_axis(id);
+            out.joints.push(JointView {
+                joint: j,
+                body: self.physics.joint_body(id).map_or(0, |b| b.0),
+                anchor,
+                axis,
+                angle: self.physics.joint_pos(id),
+                speed: self.physics.joint_vel(id),
+                torque: self.physics.joint_torque(id),
+            });
+        }
+        self.physics.contacts_into(&mut self.contacts);
+        out.contacts.clear();
+        for c in &self.contacts {
+            let is_world = |g: GeomId| self.physics.geom_body(g) == Some(BodyId(0));
+            out.contacts.push(ContactView {
+                pos: c.pos,
+                normal: c.normal,
+                normal_force: c.normal_force,
+                friction: c.friction_force,
+                floor: (is_world(c.geom1) || is_world(c.geom2)) && c.normal[2].abs() > 0.7,
+            });
+        }
+        out.com = self.physics.subtree_com(self.root);
+        out.robot_mass = self.physics.subtree_mass(self.root);
+        out.root_body = self.root.0;
+        self.hw.sensor_visuals(&mut self.physics, &mut out.sensors);
+        out.device_names = self.device_names.clone();
+        out.channel_names = self.channel_names.clone();
+        self.hw.channel_values(&mut out.channel_values);
+        let root = self.physics.body_pose(self.root);
+        let q = root.quat;
+        let yaw =
+            (2.0 * (q[0] * q[3] + q[1] * q[2])).atan2(1.0 - 2.0 * (q[2] * q[2] + q[3] * q[3]));
+        out.channel_values.extend([root.pos[0], root.pos[1], yaw]);
+        out.hash = joint_hash(&self.physics);
     }
 
-    pub(crate) fn due(&mut self) -> bool {
+    /// True when a snapshot is due (every `interval` simulated seconds).
+    pub(crate) fn due(&mut self, interval: f64) -> bool {
         let t = self.physics.time();
-        if t - self.last_publish >= SNAPSHOT_INTERVAL_S - 1e-9 {
+        if t - self.last_publish >= interval - 1e-9 {
             self.last_publish = t;
             true
         } else {
@@ -214,24 +423,7 @@ pub struct Sandbox {
 impl Sandbox {
     /// Start the sim thread. The first snapshot is available once the thread has loaded the model.
     pub fn spawn(robot: &Compiled, volts: &[(String, f64)]) -> Result<Self, SimError> {
-        // Load on this thread first so the caller gets load errors, then let the thread build
-        // its own copy (MuJoCo handles stay on the sim thread).
-        SimCore::new(robot, volts)?;
-        let (tx, rx) = unbounded();
-        let (input, output) = triple_buffer(&SimSnapshot::default());
-        let robot = robot.clone();
-        let volts = volts.to_vec();
-        let thread = std::thread::Builder::new()
-            .name("axl-sim".into())
-            .spawn(move || sim_thread(&robot, &volts, rx, input))
-            .ok();
-        let (_, events) = unbounded();
-        Ok(Self {
-            commands: tx,
-            events,
-            output,
-            thread,
-        })
+        Self::start(robot, volts, HwOptions::default(), None, true)
     }
 
     /// Start the sim thread with a learner program. `paced` runs against the wall clock; unpaced
@@ -243,9 +435,21 @@ impl Sandbox {
         program: ProgramConfig,
         paced: bool,
     ) -> Result<Self, SimError> {
+        Self::start(robot, volts, opts, Some(program), paced)
+    }
+
+    fn start(
+        robot: &Compiled,
+        volts: &[(String, f64)],
+        opts: HwOptions,
+        program: Option<ProgramConfig>,
+        paced: bool,
+    ) -> Result<Self, SimError> {
+        // Load on this thread first so the caller gets load errors, then let the thread build its
+        // own copy (MuJoCo handles stay on the sim thread).
+        SimCore::with_options(robot, volts, opts)?;
         let robot = robot.clone();
         let volts = volts.to_vec();
-        SimCore::with_options(&robot, &volts, opts)?;
         let (tx, rx) = unbounded();
         let (etx, events) = unbounded();
         let (input, output) = triple_buffer(&SimSnapshot::default());
@@ -253,7 +457,7 @@ impl Sandbox {
             .name("axl-sim".into())
             .spawn(move || {
                 if let Ok(core) = SimCore::with_options(&robot, &volts, opts) {
-                    program::sim_thread_with_program(core, program, rx, input, etx, paced);
+                    program::sim_thread(core, program, rx, input, etx, paced);
                 }
             })
             .ok();
@@ -265,7 +469,8 @@ impl Sandbox {
         })
     }
 
-    /// What the program has done since the last call (logs, plots, drawings, the end).
+    /// What the simulation has reported since the last call (logs, plots, drawings, picks,
+    /// checkpoints, restarts, the end of the program).
     pub fn events(&self) -> &Receiver<SimEvent> {
         &self.events
     }
@@ -286,82 +491,6 @@ impl Drop for Sandbox {
         let _ = self.commands.send(Command::Stop);
         if let Some(t) = self.thread.take() {
             let _ = t.join();
-        }
-    }
-}
-
-fn sim_thread(
-    robot: &Compiled,
-    volts: &[(String, f64)],
-    commands: Receiver<Command>,
-    mut out: Input<SimSnapshot>,
-) {
-    let Ok(mut core) = SimCore::new(robot, volts) else {
-        return;
-    };
-    let publish = |core: &mut SimCore, out: &mut Input<SimSnapshot>, error: Option<&str>| {
-        let buf = out.input_buffer_mut();
-        core.fill(buf);
-        buf.error = error.map(str::to_owned);
-        out.publish();
-    };
-    publish(&mut core, &mut out, None);
-    let (mut paused, mut speed, mut failed) = (false, 1.0_f64, false);
-    // Wall-clock origin and the simulated time it corresponds to.
-    let mut origin = Instant::now();
-    let mut origin_sim = 0.0;
-    loop {
-        while let Ok(c) = commands.try_recv() {
-            match c {
-                Command::Stop => return,
-                Command::Pause => paused = true,
-                Command::Resume => {
-                    paused = false;
-                    origin = Instant::now();
-                    origin_sim = core.time();
-                }
-                Command::Reset => {
-                    core.reset();
-                    failed = false;
-                    origin = Instant::now();
-                    origin_sim = 0.0;
-                    publish(&mut core, &mut out, None);
-                }
-                Command::SetSpeed(s) => {
-                    speed = s.clamp(0.1, 4.0);
-                    origin = Instant::now();
-                    origin_sim = core.time();
-                }
-                Command::SetVolts { motor, volts } => {
-                    let _ = core.set_volts(&motor, volts);
-                }
-                Command::SetMotor { motor, command } => {
-                    let _ = core.command(&motor, command);
-                }
-            }
-        }
-        if paused || failed {
-            std::thread::sleep(Duration::from_millis(5));
-            continue;
-        }
-        // Pace: step until simulated time reaches wall time x speed, but never more than 50 ms
-        // of catching up in one go.
-        let target = origin_sim + origin.elapsed().as_secs_f64() * speed;
-        let limit = core.time() + 0.05;
-        let mut steps = 0;
-        while core.time() < target.min(limit) {
-            if !core.tick() {
-                failed = true;
-                publish(&mut core, &mut out, Some(UNSTABLE_MESSAGE));
-                break;
-            }
-            steps += 1;
-            if core.due() {
-                publish(&mut core, &mut out, None);
-            }
-        }
-        if steps == 0 {
-            std::thread::sleep(Duration::from_millis(1));
         }
     }
 }

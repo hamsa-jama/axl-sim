@@ -1,6 +1,11 @@
 //! A learner program on the sim thread: [`SimRobot`] implements the host's [`RobotApi`] on top of
 //! the stepping core, so `axl_step` runs 1 ms ticks paced against the wall clock. When `main`
 //! returns, every motor brakes and the simulation carries on by itself.
+//!
+//! The same loop serves the sandbox (no program) and handles the time controls: pause, single
+//! steps, speed, reset, and rewind by deterministic replay from 0 (the controller restarts, runs
+//! flat out to the target time and the simulation pauses there). Drag forces are logged by
+//! simulated time so a replay applies them again.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -11,19 +16,29 @@ use axl_host::{
     RunEnd, StepStatus,
 };
 use axl_hw::{ColorName, Slot};
+use axl_mujoco::{BodyId, GroupMask, Pose};
 use crossbeam_channel::{Receiver, Sender};
 use triple_buffer::Input;
 
-use crate::{Command, SimCore, SimSnapshot, UNSTABLE_MESSAGE};
+use crate::{Command, SimCore, SimSnapshot, UNSTABLE_MESSAGE, joint_hash};
 
 /// Most plot channels one program may use (SPEC).
 pub const MAX_PLOT_CHANNELS: usize = 16;
 
-/// Things the program does that the app shows.
+/// Seconds of simulated time between snapshots while a replay runs flat out.
+const REPLAY_SNAPSHOT_INTERVAL_S: f64 = 0.05;
+
+/// Things the simulation reports that the app shows.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SimEvent {
     /// The program started.
     Started,
+    /// The simulation went back to time 0 (a reset or a rewind). Plots, trails and drawings from
+    /// the old run are stale: a rewind replays them.
+    Restarted {
+        /// The time being replayed to, for a rewind.
+        replay_to: Option<f64>,
+    },
     /// A line from stdout or stderr.
     Log {
         /// Which stream.
@@ -69,8 +84,42 @@ pub enum SimEvent {
         /// Value.
         value: f64,
     },
+    /// The answer to a [`Command::Pick`]: the nearest robot or object body under the ray.
+    Picked {
+        /// The id of the command.
+        id: u64,
+        /// What was hit.
+        hit: Option<PickHit>,
+    },
+    /// The state at a whole simulated second, for the scrub bar's preview.
+    Checkpoint {
+        /// Simulated seconds (a whole number).
+        time: f64,
+        /// Joint-position hash at that time (see [`crate::joint_hash`]).
+        hash: u64,
+        /// Pose of every body.
+        bodies: Vec<Pose>,
+    },
     /// The program ended (or could not load). The simulation carries on.
     Ended(Result<RunEnd, String>),
+}
+
+/// What a pick ray hit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PickHit {
+    /// MuJoCo body id.
+    pub body: usize,
+    /// World point of the hit.
+    pub point: [f64; 3],
+    /// Distance along the ray, metres.
+    pub distance: f64,
+}
+
+/// One drag command with the simulated millisecond it was given at.
+#[derive(Clone, Copy, Debug)]
+struct DragEvent {
+    ms: u64,
+    force: Option<(usize, [f64; 3], [f64; 3])>,
 }
 
 struct Inner {
@@ -84,22 +133,98 @@ struct Inner {
     failed: bool,
     stop: bool,
     restart: bool,
+    /// Set with `restart` by a rewind: replay to this time, then pause.
+    pending_replay: Option<f64>,
+    /// While replaying: the time to reach.
+    replay_to: Option<f64>,
+    /// Ticks still allowed while paused (single steps).
+    step_budget: u32,
+    stepping: bool,
     origin: Instant,
     origin_sim: f64,
+    /// What the newest snapshot said about (paused, speed), so a change publishes again.
+    flags: (bool, f64),
     channels: Vec<String>,
+    drag_log: Vec<DragEvent>,
+    drag_next: usize,
 }
 
 impl Inner {
+    fn sim_ms(&self) -> u64 {
+        (self.core.time() * 1000.0).round() as u64
+    }
+
     fn publish(&mut self, error: Option<&str>) {
         let buf = self.out.input_buffer_mut();
         self.core.fill(buf);
         buf.error = error.map(str::to_owned);
+        buf.paused = self.paused;
+        buf.speed = self.speed;
+        buf.replay_target = self.replay_to;
+        self.flags = (self.paused, self.speed);
         self.out.publish();
     }
 
     fn rebase(&mut self) {
         self.origin = Instant::now();
         self.origin_sim = self.core.time();
+    }
+
+    fn checkpoint(&mut self) {
+        let physics = self.core.physics();
+        let bodies: Vec<Pose> = (0..physics.body_count())
+            .map(|i| physics.body_pose(BodyId(i)))
+            .collect();
+        let hash = joint_hash(physics);
+        let time = self.core.time().round();
+        self.send(SimEvent::Checkpoint { time, hash, bodies });
+    }
+
+    fn pick(&mut self, id: u64, origin: [f64; 3], dir: [f64; 3]) {
+        // Robot (group 1) and loose objects (group 2): the floor and walls are not pickable.
+        self.core.physics_mut().forward();
+        let hit = self
+            .core
+            .physics_mut()
+            .ray(origin, dir, GroupMask(0b0000_0110))
+            .and_then(|h| {
+                let body = self.core.physics().geom_body(h.geom)?;
+                Some(PickHit {
+                    body: body.0,
+                    point: h.point,
+                    distance: h.distance,
+                })
+            });
+        self.send(SimEvent::Picked { id, hit });
+    }
+
+    fn drag(&mut self, force: Option<(usize, [f64; 3], [f64; 3])>) {
+        if self.replay_to.is_some() {
+            return; // the logged drags are being replayed
+        }
+        let ms = self.sim_ms();
+        self.drag_log.push(DragEvent { ms, force });
+        self.drag_next = self.drag_log.len();
+        self.apply_drag(force);
+    }
+
+    fn apply_drag(&mut self, force: Option<(usize, [f64; 3], [f64; 3])>) {
+        match force {
+            Some((body, point, f)) => self.core.physics_mut().apply_force(BodyId(body), point, f),
+            None => self.core.physics_mut().clear_applied_forces(),
+        }
+    }
+
+    /// While replaying, apply the logged drag commands that are due.
+    fn replay_drags(&mut self) {
+        let ms = self.sim_ms();
+        while let Some(e) = self.drag_log.get(self.drag_next).copied() {
+            if e.ms > ms {
+                break;
+            }
+            self.drag_next += 1;
+            self.apply_drag(e.force);
+        }
     }
 
     fn poll(&mut self) {
@@ -109,10 +234,21 @@ impl Inner {
                 Command::Pause => self.paused = true,
                 Command::Resume => {
                     self.paused = false;
+                    self.step_budget = 0;
                     self.rebase();
+                }
+                Command::Step { ms } => {
+                    self.paused = true;
+                    self.step_budget = (self.step_budget + ms).min(1000);
                 }
                 Command::Reset => {
                     self.restart = true;
+                    self.pending_replay = None;
+                    self.drag_log.clear();
+                }
+                Command::Rewind(t) => {
+                    self.restart = true;
+                    self.pending_replay = Some(t.max(0.0));
                 }
                 Command::SetSpeed(s) => {
                     self.speed = s.clamp(0.1, 4.0);
@@ -124,18 +260,46 @@ impl Inner {
                 Command::SetMotor { motor, command } => {
                     let _ = self.core.command(&motor, command);
                 }
+                Command::Pick { id, origin, dir } => self.pick(id, origin, dir),
+                Command::ApplyDragForce { body, point, force } => {
+                    self.drag(Some((body, point, force)));
+                }
+                Command::ClearDrag => self.drag(None),
             }
         }
     }
 
-    /// Wait until the next 1 ms tick is due. False when the program should end (stop or reset).
+    /// Wait until the next 1 ms tick is due. False when the program should end (stop or restart).
     fn wait_turn(&mut self) -> bool {
         loop {
             self.poll();
+            if (self.paused, self.speed) != self.flags {
+                self.publish(None);
+            }
             if self.stop || self.restart {
                 return false;
             }
+            if let Some(target) = self.replay_to {
+                if self.core.time() + 1e-9 >= target {
+                    // Arrived: drops the log entries after this time (they are the old future) and
+                    // waits here, paused.
+                    let ms = self.sim_ms();
+                    self.drag_log.retain(|e| e.ms <= ms);
+                    self.drag_next = self.drag_log.len();
+                    self.replay_to = None;
+                    self.paused = true;
+                    self.step_budget = 0;
+                    self.publish(None);
+                    continue;
+                }
+                return true; // flat out: no pacing while replaying
+            }
             if self.paused {
+                if self.step_budget > 0 {
+                    self.step_budget -= 1;
+                    self.stepping = true;
+                    return true;
+                }
                 std::thread::sleep(Duration::from_millis(5));
                 continue;
             }
@@ -159,12 +323,25 @@ impl Inner {
         if !self.wait_turn() {
             return Ok(false);
         }
+        if self.replay_to.is_some() {
+            self.replay_drags();
+        }
         if !self.core.tick() {
             self.failed = true;
+            self.replay_to = None;
             self.publish(Some(UNSTABLE_MESSAGE));
             return Err(UNSTABLE_MESSAGE.into());
         }
-        if self.core.due() {
+        if self.sim_ms().is_multiple_of(1000) {
+            self.checkpoint();
+        }
+        let interval = if self.replay_to.is_some() {
+            REPLAY_SNAPSHOT_INTERVAL_S
+        } else {
+            crate::SNAPSHOT_INTERVAL_S
+        };
+        let due = self.core.due(interval);
+        if std::mem::take(&mut self.stepping) || due {
             self.publish(None);
         }
         Ok(true)
@@ -363,11 +540,11 @@ pub struct ProgramConfig {
     pub host: HostConfig,
 }
 
-/// The sim thread body with a program: run it, then keep the simulation going until stopped. A
-/// `Reset` restarts the simulation and the program.
-pub(crate) fn sim_thread_with_program(
+/// The sim thread body: run the program (if any), then keep the simulation going until stopped.
+/// A `Reset` or `Rewind` restarts the simulation and the program.
+pub(crate) fn sim_thread(
     mut core: SimCore,
-    program: ProgramConfig,
+    program: Option<ProgramConfig>,
     commands: Receiver<Command>,
     out: Input<SimSnapshot>,
     events: Sender<SimEvent>,
@@ -385,11 +562,22 @@ pub(crate) fn sim_thread_with_program(
         failed: false,
         stop: false,
         restart: false,
+        pending_replay: None,
+        replay_to: None,
+        step_budget: 0,
+        stepping: false,
         origin: Instant::now(),
         origin_sim: 0.0,
+        flags: (false, 1.0),
         channels: Vec::new(),
+        drag_log: Vec::new(),
+        drag_next: 0,
     }));
-    inner.borrow_mut().publish(None);
+    {
+        let mut s = inner.borrow_mut();
+        s.publish(None);
+        s.checkpoint();
+    }
     loop {
         {
             let mut s = inner.borrow_mut();
@@ -398,26 +586,33 @@ pub(crate) fn sim_thread_with_program(
                 s.failed = false;
                 s.restart = false;
                 s.channels.clear();
+                s.replay_to = s.pending_replay.take();
+                s.drag_next = 0;
+                s.step_budget = 0;
                 s.rebase();
-                s.origin_sim = 0.0;
                 s.publish(None);
+                s.checkpoint();
+                let replay_to = s.replay_to;
+                s.send(SimEvent::Restarted { replay_to });
             }
         }
-        inner.borrow().send(SimEvent::Started);
-        match Controller::new(&program.wasm, SimRobot(inner.clone()), &program.host) {
-            Ok(mut c) => {
-                let end = c.run();
-                inner.borrow().send(SimEvent::Ended(Ok(end)));
-            }
-            Err(e) => {
-                inner.borrow().send(SimEvent::Ended(Err(load_message(&e))));
-                SimRobot(inner.clone()).program_ended();
+        if let Some(program) = &program {
+            inner.borrow().send(SimEvent::Started);
+            match Controller::new(&program.wasm, SimRobot(inner.clone()), &program.host) {
+                Ok(mut c) => {
+                    let end = c.run();
+                    inner.borrow().send(SimEvent::Ended(Ok(end)));
+                }
+                Err(e) => {
+                    inner.borrow().send(SimEvent::Ended(Err(load_message(&e))));
+                    SimRobot(inner.clone()).program_ended();
+                }
             }
         }
         if inner.borrow().stop {
             return;
         }
-        // The simulation carries on without a program until stopped or reset.
+        // The simulation carries on without a program until stopped, reset or rewound.
         loop {
             let mut s = inner.borrow_mut();
             if s.stop {
