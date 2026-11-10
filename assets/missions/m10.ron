@@ -36,7 +36,7 @@ error in its reading. Measure it while the Rover stands still, then subtract it.
     ),
     hints: (
         "Read the gyro's z value (turning rate about the vertical axis, in rad/s) with axl_imu_gyro and print it while the Rover stands still. It is not zero.",
-        "Wait 1 s at the start, average the gyro z, and call it the bias. Then heading += (gyro_z - bias) * dt every step.",
-        "Steer with the heading error: left = base - k * heading, right = base + k * heading (heading in radians, positive to the left). Stop when the average wheel angle shows 1.5 m.",
+        "Stand still for 0.4 s before the first push (it comes at 0.5 s), average the gyro z, and call it the bias. Then heading += (gyro_z - bias) * dt every step.",
+        "Steer against the heading error: heading is positive when the Rover points to the left, so the left wheel must go faster: left = base + k * heading, right = base - k * heading. Stop when the average wheel angle shows 1.5 m, and drive slowly (about 0.25 m/s): a push costs less sideways distance at low speed.",
     ),
 )

@@ -52,3 +52,32 @@ fn dbg_com() {
         }
     }
 }
+
+#[test]
+fn dbg_ramp_contacts() {
+    use axl_hw::MotorCommand;
+    let m = mission("m07").unwrap();
+    let cat = Catalog::builtin();
+    let asm = build_starter(&cat, "rover").unwrap();
+    let s = setup(&m, 1, &asm, &cat).unwrap();
+    let mut core = s.core().unwrap();
+    for t in 0..2500 {
+        if t == 0 {
+            let _ = core.command("left", MotorCommand::Power(0.4));
+            let _ = core.command("right", MotorCommand::Power(0.4));
+        }
+        core.tick();
+        if t % 500 == 499 {
+            let root = core.physics().body_pose(core.root_body()).pos;
+            eprintln!("t {} root {:?}", t + 1, root);
+            for c in core.physics().contacts() {
+                if c.normal_force.abs() > 1e-6 {
+                    eprintln!(
+                        "  rel ({:.3},{:.3},{:.3}) n ({:.2},{:.2},{:.2}) f {:.2} g {:?}/{:?}",
+                        c.pos[0] - root[0], c.pos[1] - root[1], c.pos[2], c.normal[0], c.normal[1], c.normal[2], c.normal_force, c.geom1, c.geom2
+                    );
+                }
+            }
+        }
+    }
+}

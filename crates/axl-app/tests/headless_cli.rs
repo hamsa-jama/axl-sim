@@ -22,9 +22,21 @@ fn bare_headless_prints_version_and_succeeds() {
 }
 
 #[test]
-fn headless_mission_is_not_available_yet() {
+fn a_robot_that_does_nothing_fails_with_exit_code_1_and_json() {
     let out = axl()
-        .args(["--headless", "--mission", "m01"])
+        .args(["--headless", "--mission", "m01", "--seed", "1"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("\"mission\": \"m01\""), "{text}");
+    assert!(text.contains("\"passed\": false"), "{text}");
+}
+
+#[test]
+fn an_unknown_mission_is_a_setup_error_with_exit_code_2() {
+    let out = axl()
+        .args(["--headless", "--mission", "m99"])
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(2));

@@ -13,7 +13,7 @@
         (
             uid: 2,
             part: "hub",
-            pos: (-80, 0, 32),
+            pos: (-160, 0, 32),
             orient: 0,
             color: "white",
             device: Some((
@@ -24,7 +24,7 @@
         (
             uid: 3,
             part: "sensor_ultrasonic",
-            pos: (160, 0, 256),
+            pos: (80, 0, 256),
             orient: 0,
             color: "black",
             device: Some((

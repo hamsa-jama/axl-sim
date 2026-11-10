@@ -82,6 +82,11 @@ fn on_port(mut s: Step, port: Port) -> Step {
 /// Where the hub is aimed at on the Rover's plate, mm.
 const HUB_X: f64 = -16.0;
 
+/// Where the caster stack is aimed at, mm: 44 mm behind the axle. With the caster only 28 mm behind
+/// it (the first layout) the wheels carried too little load and lost grip on the ramps; the plate
+/// does not allow the stack any further back (decision 0015).
+const CASTER_X: f64 = -40.0;
+
 /// The Rover recipe: two medium motors, two 56 mm wheels, a caster, an ultrasonic sensor and a
 /// colour sensor, on an 8x16 plate under a hub. The motors, caster and colour sensor hang under
 /// the plate; the wheels sit outside it on 3-unit axles.
@@ -129,9 +134,9 @@ pub fn rover_steps() -> Vec<Step> {
         step("wheel_56", "white", "T", Aim::FromPosY(4.0, -12.0)),
         step("wheel_56", "white", "T", Aim::FromNegY(4.0, -12.0)),
         // Caster stack at the back: two 2x2 bricks lift the ball to the wheels' floor line.
-        below(step("brick_2x2", "red", "", Aim::Down(-24.0, 0.0))),
-        below(step("brick_2x2", "red", "", Aim::Down(-24.0, 0.0))),
-        below(step("caster_ball", "dark_grey", "", Aim::Down(-24.0, 0.0))),
+        below(step("brick_2x2", "red", "", Aim::Down(CASTER_X, 0.0))),
+        below(step("brick_2x2", "red", "", Aim::Down(CASTER_X, 0.0))),
+        below(step("caster_ball", "dark_grey", "", Aim::Down(CASTER_X, 0.0))),
         on_port(
             named(
                 below(step("sensor_color", "white", "", Aim::Down(24.0, 0.0))),

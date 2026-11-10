@@ -10,6 +10,7 @@
 
 pub mod def;
 pub mod eval;
+pub mod learn;
 pub mod library;
 pub mod progress;
 pub mod trace;
