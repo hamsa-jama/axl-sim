@@ -18,7 +18,7 @@ One row per milestone from `SPEC.md`. States: not started, in progress, accepted
 
 ## Where I stopped
 
-M7 Controllers is accepted and merged into `main` (merge commit 7771a38); the next milestone is M8 (not started). Open items: owner checks O8, O13 to O16 (tags `m03-done`, `m05-done`, `m06-done`, `m07-done` still need pushing), and the low-priority render follow-up from the owner's laptop run: GPU `uniform_allocation` and `bin_unpacking` grew on Low after the bindless mask; check whether they scale with the number of distinct materials and, if so, reduce per-part roughness/brightness variation levels on Low (record before and after under llvmpipe). Known unrelated problem: `cargo check -p axl-app --no-default-features` fails because `settings.rs` uses `axl_render` unconditionally (decision 0013).
+M7 Controllers is accepted and merged into `main` (merge commit 7771a38); the next milestone is M8 (not started). Open items: owner checks O8, O13 to O16 (tags `m03-done`, `m05-done`, `m06-done`, `m07-done` still need pushing), and the low-priority render follow-up from the owner's laptop run: GPU `uniform_allocation` and `bin_unpacking` grew on Low after the bindless mask; check whether they scale with the number of distinct materials and, if so, reduce per-part roughness/brightness variation levels on Low (record before and after under llvmpipe).
 
 ## Owner checks
 

@@ -14,6 +14,8 @@ mod gui;
 mod headless;
 #[cfg(feature = "gui")]
 mod sandbox;
+// Settings name `axl_render` types (quality, units), so only the window build has them.
+#[cfg(feature = "gui")]
 mod settings;
 
 use std::process::ExitCode;

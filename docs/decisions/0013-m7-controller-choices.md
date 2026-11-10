@@ -38,5 +38,4 @@ fixes the ABI and the watchdog; these are the choices it left open.
 
 - The Code screen runs the Rover in an empty world: missions and their worlds arrive with M8/M9, so
   the m01 wall is only in the tests, and plot, pose and drawing events are produced but not yet drawn.
-- `axl-app --no-default-features` does not compile (`settings.rs` uses `axl_render` unconditionally).
-  This predates M7; left alone.
+- (Fixed after M7: `settings` is now gui-only, so `axl-app --no-default-features` builds again and CI checks it.)
